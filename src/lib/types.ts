@@ -132,6 +132,8 @@ export interface EveMap3DProps {
   systems: SolarSystem[];
   /** 星门数据（必需） */
   stargates: Stargate[];
+  /** 星域数据（可选，用于显示星域标签） */
+  regions?: Region[];
   /** 语言设置 (默认 'zh') */
   language?: Language;
   /** 星系渲染配置数组（可选，不传入则按安全等级渲染） */

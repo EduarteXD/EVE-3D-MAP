@@ -10,6 +10,7 @@ function App() {
   const [regions, setRegions] = useState<Region[]>([])
   const [selectedSystem, setSelectedSystem] = useState<SolarSystem | null>(null)
   const [highlightedRegionId, setHighlightedRegionId] = useState<number | null>(null)
+  const [hasUserSelectedRegion, setHasUserSelectedRegion] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const language: 'zh' | 'en' = 'zh'
@@ -146,13 +147,19 @@ function App() {
       <EveMap3D
         systems={systems}
         stargates={stargates}
+        regions={regions}
         language={language}
         filterNewEdenOnly={true}
-        highlightedRegionId={highlightedRegionId}
+        highlightedRegionId={hasUserSelectedRegion ? highlightedRegionId : undefined}
         mapControl={mapControl}
         events={{
           onSystemClick: (system) => {
             setSelectedSystem(system)
+            // 点击新星系时，如果用户之前选择了星域，清除星域选择
+            if (hasUserSelectedRegion) {
+              setHighlightedRegionId(null)
+              setHasUserSelectedRegion(false)
+            }
           },
         }}
       />
@@ -187,7 +194,13 @@ function App() {
           </div>
           <select
             value={highlightedRegionId || ''}
-            onChange={e => setHighlightedRegionId(e.target.value ? Number(e.target.value) : null)}
+            onChange={e => {
+              const value = e.target.value ? Number(e.target.value) : null
+              setHighlightedRegionId(value)
+              setHasUserSelectedRegion(true)
+              // 选择新星域时，清除选中的星系
+              setSelectedSystem(null)
+            }}
             style={{
               width: '100%',
               marginTop: '5px',
