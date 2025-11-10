@@ -22,7 +22,7 @@ export function SolarSystemLabel({
 	const baseFontSize = style?.labelFontSize || 1e15;
 	const grayFontSize = baseFontSize * 0.7;
 	const labelOffset = pointSize * 3;
-	const maxGrayLabelDistance = 5e16;
+	const maxGrayLabelDistance = 5e18;
 
 	useFrame(() => {
 		if (textRef.current) {
@@ -45,7 +45,7 @@ export function SolarSystemLabel({
 			// 使标签完全面向摄像机，平行于屏幕
 			textRef.current.quaternion.copy(camera.quaternion);
 			
-			const scale = distanceToCamera / 3e16;
+			const scale = distanceToCamera / 5e16 * (isHighlightedRegion ? 0.9 : 1.3);
 			textRef.current.scale.setScalar(scale);
 		}
 	});
@@ -57,7 +57,7 @@ export function SolarSystemLabel({
 	return (
 		<Text
 			ref={textRef}
-			position={[-system.position.x + labelOffset, -system.position.y, system.position.z]}
+			position={[-system.position.x + labelOffset , -system.position.y, system.position.z]}
 			fontSize={fontSize}
 			color={labelColor}
 			anchorX="left"

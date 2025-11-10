@@ -59,25 +59,31 @@ export function SolarSystemPoints({
 		[],
 	);
 
-	const normalGeometry = useMemo(() => new THREE.SphereGeometry(SYSTEM_POINT_SIZE, 16, 16), []);
-	const highlightGeometry = useMemo(() => new THREE.SphereGeometry(SYSTEM_POINT_SIZE * 1.5, 16, 16), []);
+	const normalGeometry = useMemo(() => new THREE.SphereGeometry(SYSTEM_POINT_SIZE, 32, 32), []);
+	const highlightGeometry = useMemo(() => new THREE.SphereGeometry(SYSTEM_POINT_SIZE * 1.5, 32, 32), []);
 
 	const materials = useMemo(() => {
 		const baseMaterials = {
 			highsec: new THREE.MeshBasicMaterial({
 				color: mergedSecurityColors.highsec,
 				transparent: true,
-				opacity: 0.9,
+				opacity: 0.7,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false,
 			}),
 			lowsec: new THREE.MeshBasicMaterial({
 				color: mergedSecurityColors.lowsec,
 				transparent: true,
-				opacity: 0.9,
+				opacity: 0.7,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false,
 			}),
 			nullsec: new THREE.MeshBasicMaterial({
 				color: mergedSecurityColors.nullsec,
 				transparent: true,
-				opacity: 0.9,
+				opacity: 0.7,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false,
 			}),
 		};
 
@@ -85,17 +91,23 @@ export function SolarSystemPoints({
 			highsec: new THREE.MeshBasicMaterial({
 				color: mergedHighlightColors.highsec,
 				transparent: true,
-				opacity: 1.0,
+				opacity: 0.85,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false,
 			}),
 			lowsec: new THREE.MeshBasicMaterial({
 				color: mergedHighlightColors.lowsec,
 				transparent: true,
-				opacity: 1.0,
+				opacity: 0.85,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false,
 			}),
 			nullsec: new THREE.MeshBasicMaterial({
 				color: mergedHighlightColors.nullsec,
 				transparent: true,
-				opacity: 1.0,
+				opacity: 0.85,
+				blending: THREE.AdditiveBlending,
+				depthWrite: false,
 			}),
 		};
 
@@ -161,16 +173,19 @@ export function SolarSystemPoints({
 			if (!result.has(key)) {
 				const config = items[0].config;
 				const color = config.color || mergedSecurityColors.highsec;
-				const opacity = config.opacity !== undefined ? config.opacity : 0.9;
+				const opacity = config.opacity !== undefined ? config.opacity : 0.7;
 				const scale = clampSystemPointBaseScale(config.size ?? 1.0);
+				const isHighlighted = config.highlighted || false;
 
 				result.set(key, {
 					material: new THREE.MeshBasicMaterial({
 						color,
 						transparent: true,
-						opacity,
+						opacity: isHighlighted ? Math.min(opacity * 1.2, 1.0) : opacity,
+						blending: THREE.AdditiveBlending,
+						depthWrite: false,
 					}),
-					geometry: new THREE.SphereGeometry(SYSTEM_POINT_SIZE * scale, 16, 16),
+					geometry: new THREE.SphereGeometry(SYSTEM_POINT_SIZE * scale, 32, 32),
 				});
 			}
 		});

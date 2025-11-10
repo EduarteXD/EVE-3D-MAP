@@ -76,7 +76,7 @@ export function StargateConnections({
 			new THREE.LineBasicMaterial({
 				color: style?.connectionLineColor || '#4488ff',
 				transparent: true,
-				opacity: style?.connectionLineOpacity !== undefined ? style.connectionLineOpacity : 0.3,
+				opacity: style?.connectionLineOpacity !== undefined ? style.connectionLineOpacity : 0.2,
 			}),
 		[style],
 	);
@@ -86,7 +86,7 @@ export function StargateConnections({
 			new THREE.LineBasicMaterial({
 				color: style?.highlightedConnectionLineColor || '#00ffff',
 				transparent: false,
-				opacity: 1.0,
+				opacity: 0.8,
 			}),
 		[style],
 	);
