@@ -1,21 +1,4 @@
-// 加载EVE SDE数据工具函数
-
-export interface SolarSystem {
-  _key: number;
-  name: { [key: string]: string };
-  position: { x: number; y: number; z: number };
-  regionID: number;
-  constellationID: number;
-  securityStatus: number;
-  securityClass?: string;
-}
-
-export interface Region {
-  _key: number;
-  name: { [key: string]: string };
-  position: { x: number; y: number; z: number };
-  constellationIDs: number[];
-}
+import type { SolarSystem, Region, Stargate } from '../lib/types';
 
 export interface Constellation {
   _key: number;
@@ -25,16 +8,8 @@ export interface Constellation {
   solarSystemIDs: number[];
 }
 
-export interface Stargate {
-  _key: number;
-  solarSystemID: number;
-  destination: {
-    solarSystemID: number;
-    stargateID: number;
-  };
-  position: { x: number; y: number; z: number };
-  typeID: number;
-}
+// 重新导出类型以便demo使用
+export type { SolarSystem, Region, Stargate };
 
 /**
  * 解析JSONL文件
@@ -46,38 +21,34 @@ async function parseJSONL<T>(url: string): Promise<T[]> {
   return lines.map(line => JSON.parse(line) as T);
 }
 
+const DATA_DIR = '/data';
+
 /**
  * 加载太阳系数据
  */
 export async function loadSolarSystems(): Promise<SolarSystem[]> {
-  return parseJSONL<SolarSystem>('/eve sde/mapSolarSystems.jsonl');
+  return parseJSONL<SolarSystem>(`${DATA_DIR}/mapSolarSystems.jsonl`);
 }
 
 /**
  * 加载区域数据
  */
 export async function loadRegions(): Promise<Region[]> {
-  return parseJSONL<Region>('/eve sde/mapRegions.jsonl');
+  return parseJSONL<Region>(`${DATA_DIR}/mapRegions.jsonl`);
 }
 
 /**
  * 加载星座数据
  */
 export async function loadConstellations(): Promise<Constellation[]> {
-  return parseJSONL<Constellation>('/eve sde/mapConstellations.jsonl');
+  return parseJSONL<Constellation>(`${DATA_DIR}/mapConstellations.jsonl`);
 }
 
 /**
  * 加载星门数据
  */
 export async function loadStargates(): Promise<Stargate[]> {
-  return parseJSONL<Stargate>('/eve sde/mapStargates.jsonl');
+  return parseJSONL<Stargate>(`${DATA_DIR}/mapStargates.jsonl`);
 }
 
-/**
- * 过滤New Eden太阳系（ID范围 30000000-30999999）
- */
-export function isNewEdenSystem(systemID: number): boolean {
-  return systemID >= 30000000 && systemID < 31000000;
-}
 
