@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { EveMap3D, useMapControl, isNewEdenSystem, type SolarSystem, type Stargate, type Region } from './lib'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { EveMap3D, useMapControl, isNewEdenSystem, type SolarSystem, type Stargate, type Region, type Jumpgate, type JumpDriveConfig } from './lib'
 import { loadSolarSystems, loadStargates, loadRegions } from './utils/loadEveData'
 import './App.css'
 
@@ -13,6 +13,11 @@ function App() {
   const [hasUserSelectedRegion, setHasUserSelectedRegion] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [jumpDriveEnabled, setJumpDriveEnabled] = useState(true)
+  const [jumpDriveOriginId, setJumpDriveOriginId] = useState<number>(30004937)
+  const [jumpDriveOriginInput, setJumpDriveOriginInput] = useState('30004937')
+  const [jumpDriveRange, setJumpDriveRange] = useState<number>(5)
+  const [jumpDriveError, setJumpDriveError] = useState<string | null>(null)
   const language: 'zh' | 'en' = 'zh'
 
   // 加载数据
@@ -42,11 +47,14 @@ function App() {
   }, [systems])
 
   // 计算连接数
+  const systemMap = useMemo(() => {
+    return new Map(systems.map(system => [system._key, system]))
+  }, [systems])
+
   const connections = useMemo(() => {
     if (filteredSystems.length === 0 || stargates.length === 0) return 0
 
     const systemSet = new Set(filteredSystems.map(s => s._key))
-    const systemMap = new Map(systems.map(s => [s._key, s]))
     const connectionSet = new Set<string>()
 
     stargates.forEach(stargate => {
@@ -67,7 +75,121 @@ function App() {
     })
 
     return connectionSet.size
-  }, [systems, stargates, filteredSystems])
+  }, [stargates, filteredSystems, systemMap])
+
+  // Demo 跳桥连接
+  const jumpgates = useMemo<Jumpgate[]>(() => {
+    if (systems.length === 0) {
+      return []
+    }
+
+    const resolveSystemId = (searchName: string): number | undefined => {
+      const normalized = searchName.trim().toLowerCase()
+      const match = systems.find(system => {
+        const enName = system.name.en?.toLowerCase()
+        const zhName = system.name.zh?.toLowerCase()
+        return enName === normalized || zhName === normalized
+      })
+      return match?._key
+    }
+
+    const pairs: Array<[string, string]> = [
+      ['TCAG-3', 'L5D-ZL'],
+      ['F-M1FU', 'L-YMYU']
+    ]
+
+    const resolved: Jumpgate[] = []
+    pairs.forEach(([fromName, toName]) => {
+      const fromId = resolveSystemId(fromName)
+      const toId = resolveSystemId(toName)
+      if (fromId !== undefined && toId !== undefined) {
+        resolved.push({ fromSystemId: fromId, toSystemId: toId })
+      }
+    })
+
+    return resolved
+  }, [systems])
+
+  const resolveSystemIdentifier = useCallback((value: string) => {
+    const trimmed = value.trim()
+    if (trimmed.length === 0) {
+      return undefined
+    }
+
+    const numeric = Number(trimmed)
+    if (!Number.isNaN(numeric)) {
+      if (systemMap.has(numeric)) {
+        return numeric
+      }
+    }
+
+    const normalized = trimmed.toLowerCase()
+    for (const system of systems) {
+      const enName = system.name.en?.toLowerCase()
+      const zhName = system.name.zh?.toLowerCase()
+      if (enName === normalized || zhName === normalized) {
+        return system._key
+      }
+    }
+
+    return undefined
+  }, [systemMap, systems])
+
+  const jumpDriveConfig = useMemo<JumpDriveConfig | undefined>(() => {
+    if (!jumpDriveEnabled) {
+      return undefined
+    }
+    return {
+      originSystemId: jumpDriveOriginId,
+      rangeLightYears: Math.max(jumpDriveRange, 0),
+      showBubble: true,
+      bubbleColor: '#00ffff',
+      bubbleOpacity: 0.06,
+    }
+  }, [jumpDriveEnabled, jumpDriveOriginId, jumpDriveRange])
+
+  const jumpDriveOriginName = useMemo(() => {
+    const system = systemMap.get(jumpDriveOriginId)
+    if (!system) {
+      return null
+    }
+    if (language === 'zh') {
+      return system.name.zh || system.name.en || `${system._key}`
+    }
+    return system.name.en || system.name.zh || `${system._key}`
+  }, [systemMap, jumpDriveOriginId, language])
+
+  useEffect(() => {
+    const system = systemMap.get(jumpDriveOriginId)
+    if (!system) {
+      return
+    }
+    const displayName =
+      language === 'zh'
+        ? system.name.zh || system.name.en
+        : system.name.en || system.name.zh
+    if (displayName && jumpDriveOriginInput === `${jumpDriveOriginId}`) {
+      setJumpDriveOriginInput(displayName)
+    }
+  }, [systemMap, jumpDriveOriginId, language, jumpDriveOriginInput])
+
+  const handleApplyJumpDriveOrigin = useCallback(() => {
+    const resolved = resolveSystemIdentifier(jumpDriveOriginInput)
+    if (resolved !== undefined) {
+      setJumpDriveOriginId(resolved)
+      const system = systemMap.get(resolved)
+      const displayName =
+        language === 'zh'
+          ? system?.name.zh || system?.name.en || `${resolved}`
+          : system?.name.en || system?.name.zh || `${resolved}`
+      setJumpDriveOriginInput(displayName ?? `${resolved}`)
+      setJumpDriveError(null)
+      mapControl.focusSystem?.(resolved)
+      return
+    }
+
+    setJumpDriveError(language === 'zh' ? '未找到匹配的星系，请输入有效的ID或名称。' : 'System not found. Please enter a valid ID or name.')
+  }, [resolveSystemIdentifier, jumpDriveOriginInput, systemMap, language, mapControl])
 
   // 翻译文本
   const t = useMemo(() => {
@@ -76,6 +198,7 @@ function App() {
         title: 'EVE 3D 星图',
         systemsTotal: '太阳系总数',
         connections: '星门连接',
+        jumpbridges: '跳桥连接',
         highlightRegion: '高亮星域',
         none: '无',
         selectedSystem: '选中系统',
@@ -94,6 +217,7 @@ function App() {
         title: 'EVE 3D Star Map',
         systemsTotal: 'Total Systems',
         connections: 'Stargate Connections',
+        jumpbridges: 'Jump Bridge Connections',
         highlightRegion: 'Highlight Region',
         none: 'None',
         selectedSystem: 'Selected System',
@@ -147,11 +271,13 @@ function App() {
       <EveMap3D
         systems={systems}
         stargates={stargates}
+        jumpgates={jumpgates}
         regions={regions}
         language={language}
         filterNewEdenOnly={true}
         highlightedRegionId={hasUserSelectedRegion ? highlightedRegionId : undefined}
         mapControl={mapControl}
+        jumpDriveConfig={jumpDriveConfig}
         events={{
           onSystemClick: (system) => {
             setSelectedSystem(system)
@@ -186,6 +312,95 @@ function App() {
         </div>
         <div>
           {t.connections}: {connections}
+        </div>
+        <div>
+          {t.jumpbridges}: {jumpgates.length}
+        </div>
+
+        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444', pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={jumpDriveEnabled}
+                onChange={e => setJumpDriveEnabled(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span>{language === 'zh' ? '跳跃引擎泡泡' : 'Jump Drive Bubble'}</span>
+            </label>
+          </div>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#ccc' }}>
+            <div>{language === 'zh' ? '当前起始星系' : 'Current Origin'}: {jumpDriveOriginName ? `${jumpDriveOriginName} (${jumpDriveOriginId})` : jumpDriveOriginId}</div>
+          </div>
+          <div style={{ marginTop: '6px' }}>
+            <input
+              type="text"
+              value={jumpDriveOriginInput}
+              onChange={e => setJumpDriveOriginInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleApplyJumpDriveOrigin()
+                }
+              }}
+              placeholder={language === 'zh' ? '输入星系ID或名称' : 'Enter system ID or name'}
+              style={{
+                width: '100%',
+                padding: '6px',
+                borderRadius: '4px',
+                border: '1px solid #555',
+                background: '#222',
+                color: '#fff',
+                fontSize: '12px',
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleApplyJumpDriveOrigin}
+              style={{
+                marginTop: '6px',
+                width: '100%',
+                padding: '6px',
+                borderRadius: '4px',
+                border: '1px solid #0ff',
+                background: '#034a4a',
+                color: '#0ff',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              {language === 'zh' ? '应用起始星系' : 'Apply Origin'}
+            </button>
+          </div>
+          <div style={{ marginTop: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '4px' }}>{language === 'zh' ? '跳跃距离（光年）' : 'Jump Range (LY)'}</label>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={jumpDriveRange}
+              onChange={e => {
+                const value = Number(e.target.value)
+                if (!Number.isNaN(value)) {
+                  setJumpDriveRange(value)
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '6px',
+                borderRadius: '4px',
+                border: '1px solid #555',
+                background: '#222',
+                color: '#fff',
+                fontSize: '12px',
+              }}
+            />
+          </div>
+          {jumpDriveError && (
+            <div style={{ marginTop: '6px', color: '#ff6666', fontSize: '12px' }}>
+              {jumpDriveError}
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444' }}>

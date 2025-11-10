@@ -31,6 +31,44 @@ export interface Stargate {
 }
 
 /**
+ * 玩家建造的跳桥连接信息
+ */
+export interface Jumpgate {
+  /** 起始星系ID */
+  fromSystemId: number;
+  /** 目标星系ID */
+  toSystemId: number;
+}
+
+/**
+ * 跳跃引擎配置
+ */
+export interface JumpDriveConfig {
+  /** 起始星系ID（优先使用，如果存在） */
+  originSystemId?: number;
+  /** 自定义起始位置（当找不到星系时使用） */
+  originPosition?: { x: number; y: number; z: number };
+  /** 跳跃距离（单位：光年） */
+  rangeLightYears: number;
+  /** 是否渲染可达泡泡（默认 true） */
+  showBubble?: boolean;
+  /** 泡泡颜色（默认 '#00ffff'） */
+  bubbleColor?: string;
+  /** 泡泡透明度（默认 0.12） */
+  bubbleOpacity?: number;
+  /** 泡泡线框透明度（默认 0.35） */
+  bubbleWireframeOpacity?: number;
+  /** 是否高亮可达星系（默认 true） */
+  showReachableSystems?: boolean;
+  /** 可达星系颜色（默认 '#00ffff'） */
+  reachableSystemColor?: string;
+  /** 可达星系大小倍数（默认 1.6） */
+  reachableSystemSizeMultiplier?: number;
+  /** 可达星系透明度（默认 1.0） */
+  reachableSystemOpacity?: number;
+}
+
+/**
  * 星系渲染配置
  */
 export interface SystemRenderConfig {
@@ -94,6 +132,12 @@ export interface CustomStyleConfig {
   connectionLineOpacity?: number;
   /** 高亮连接线颜色 */
   highlightedConnectionLineColor?: string;
+  /** 跳桥连接线颜色 */
+  jumpgateLineColor?: string;
+  /** 跳桥连接线透明度 */
+  jumpgateLineOpacity?: number;
+  /** 高亮跳桥连接线颜色 */
+  highlightedJumpgateLineColor?: string;
   /** 标签字体大小 */
   labelFontSize?: number;
   /** 标签颜色 */
@@ -134,6 +178,8 @@ export interface EveMap3DProps {
   systems: SolarSystem[];
   /** 星门数据（必需） */
   stargates: Stargate[];
+  /** 跳桥数据（可选） */
+  jumpgates?: Jumpgate[];
   /** 星域数据（可选，用于显示星域标签） */
   regions?: Region[];
   /** 语言设置 (默认 'zh') */
@@ -160,5 +206,7 @@ export interface EveMap3DProps {
   containerClassName?: string;
   /** 地图控制对象（通过 useMapControl 生成） */
   mapControl?: MapControl;
+  /** 跳跃引擎配置 */
+  jumpDriveConfig?: JumpDriveConfig;
 }
 

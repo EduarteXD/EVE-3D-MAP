@@ -12,6 +12,8 @@ import type {
   FocusConfig,
   Language,
   MapControl,
+  Jumpgate,
+  JumpDriveConfig,
 } from './types';
 import { isNewEdenSystem } from './utils';
 
@@ -27,6 +29,22 @@ const DEFAULT_HIGHLIGHT_COLORS: Required<SecurityColorConfig> = {
   nullsec: '#FF6666',
 };
 
+const JUMP_DRIVE_LIGHTYEAR_IN_METERS = 9_460_000_000_000_000;
+const SYSTEM_POINT_SIZE = 8e14;
+
+function clampSystemPointBaseScale(size?: number) {
+  if (!Number.isFinite(size)) {
+    return 1;
+  }
+  if (size === undefined) {
+    return 1;
+  }
+  if (size < 0) {
+    return 0;
+  }
+  return size;
+}
+
 // 批量渲染太阳系点的组件 - 使用InstancedMesh
 function SolarSystemPoints({
   systems,
@@ -35,6 +53,8 @@ function SolarSystemPoints({
   highlightedSystemIds,
   systemRenderConfigs,
   securityColors,
+  jumpDriveHighlight,
+  jumpDriveConfig,
 }: {
   systems: SolarSystem[];
   onSystemClick: (system: SolarSystem) => void;
@@ -42,6 +62,13 @@ function SolarSystemPoints({
   highlightedSystemIds: Set<number>;
   systemRenderConfigs?: SystemRenderConfig[];
   securityColors?: SecurityColorConfig;
+  jumpDriveHighlight?: {
+    systems: SolarSystem[];
+    color: string;
+    scale: number;
+    opacity: number;
+  };
+  jumpDriveConfig?: JumpDriveConfig;
 }) {
   const highsecNormalRef = useRef<THREE.InstancedMesh>(null);
   const highsecHighlightRef = useRef<THREE.InstancedMesh>(null);
@@ -53,7 +80,6 @@ function SolarSystemPoints({
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const mouse = useMemo(() => new THREE.Vector2(), []);
   const { camera, gl } = useThree();
-  const pointSize = 1e15;
 
   // 合并颜色配置
   const mergedSecurityColors = useMemo(() => ({
@@ -69,9 +95,8 @@ function SolarSystemPoints({
   }), []);
 
   // 创建几何体和材质
-  const normalGeometry = useMemo(() => new THREE.SphereGeometry(pointSize, 16, 16), []);
-  const highlightGeometry = useMemo(() => new THREE.SphereGeometry(pointSize * 1.5, 16, 16), []);
-
+  const normalGeometry = useMemo(() => new THREE.SphereGeometry(SYSTEM_POINT_SIZE, 16, 16), []);
+  const highlightGeometry = useMemo(() => new THREE.SphereGeometry(SYSTEM_POINT_SIZE * 1.5, 16, 16), []);
   // 创建材质
   const materials = useMemo(() => {
     const baseMaterials = {
@@ -163,7 +188,7 @@ function SolarSystemPoints({
     const groups = new Map<string, Array<{ system: SolarSystem; config: SystemRenderConfig }>>();
     systemGroups.custom.forEach(({ system, config }) => {
       const color = config.color || mergedSecurityColors.highsec;
-      const size = config.size || 1.0;
+      const size = clampSystemPointBaseScale(config.size ?? 1.0);
       const highlighted = config.highlighted || false;
       const opacity = config.opacity !== undefined ? config.opacity : 0.9;
       const key = `${color}-${size}-${highlighted}-${opacity}`;
@@ -182,11 +207,9 @@ function SolarSystemPoints({
     customSystemGroups.forEach((items, key) => {
       if (!result.has(key)) {
         const config = items[0].config;
-        const color = config.color || mergedSecurityColors.highsec;
-        const opacity = config.opacity !== undefined ? config.opacity : 0.9;
-        const size = config.size || 1.0;
-        const highlighted = config.highlighted || false;
-        const scale = highlighted ? 1.5 * size : size;
+      const color = config.color || mergedSecurityColors.highsec;
+      const opacity = config.opacity !== undefined ? config.opacity : 0.9;
+      const scale = clampSystemPointBaseScale(config.size ?? 1.0);
         
         result.set(key, {
           material: new THREE.MeshBasicMaterial({
@@ -194,12 +217,12 @@ function SolarSystemPoints({
             transparent: true,
             opacity,
           }),
-          geometry: new THREE.SphereGeometry(pointSize * scale, 16, 16),
+          geometry: new THREE.SphereGeometry(SYSTEM_POINT_SIZE * scale, 16, 16),
         });
       }
     });
     return result;
-  }, [customSystemGroups, mergedSecurityColors, pointSize]);
+  }, [customSystemGroups, mergedSecurityColors]);
 
   // 更新实例矩阵
   useEffect(() => {
@@ -270,6 +293,7 @@ function SolarSystemPoints({
         ref.instanceMatrix.needsUpdate = true;
       }
     });
+
   }, [systemGroups, customSystemGroups]);
 
   // 处理点击事件
@@ -383,6 +407,16 @@ function SolarSystemPoints({
           />
         );
       })}
+      {jumpDriveHighlight && jumpDriveHighlight.systems.length > 0 &&
+        jumpDriveHighlight.systems.filter(system => system._key !== jumpDriveConfig?.originSystemId).map(system => (
+          <JumpDriveReachableRing
+            key={`jumpdrive-ring-${system._key}`}
+            system={system}
+            color={jumpDriveHighlight.color}
+            opacity={jumpDriveHighlight.opacity}
+            scale={jumpDriveHighlight.scale}
+          />
+        ))}
     </>
   );
 }
@@ -491,6 +525,148 @@ function StargateConnections({
   );
 }
 
+// 玩家跳桥连接线组件
+function JumpgateConnections({
+  connections,
+  highlightedRegionId,
+  highlightedSystemIds,
+  style,
+}: {
+  connections: Array<{ from: SolarSystem; to: SolarSystem }>;
+  highlightedRegionId: number | null;
+  highlightedSystemIds: Set<number>;
+  style?: { jumpgateLineColor?: string; jumpgateLineOpacity?: number; highlightedJumpgateLineColor?: string; jumpgateCurveHeightScale?: number };
+}) {
+  const curveSegments = 48;
+
+  const materialSettings = useMemo(
+    () => ({
+      normalColor: style?.jumpgateLineColor || '#00ff00',
+      normalOpacity: style?.jumpgateLineOpacity !== undefined ? style.jumpgateLineOpacity : 0.85,
+      highlightedColor: style?.highlightedJumpgateLineColor || '#00ff00',
+      curveHeightScale: style?.jumpgateCurveHeightScale ?? 0.2,
+    }),
+    [style]
+  );
+
+  const normalMaterial = useMemo(
+    () =>
+      new THREE.LineBasicMaterial({
+        color: materialSettings.normalColor,
+        transparent: materialSettings.normalOpacity < 1,
+        opacity: materialSettings.normalOpacity,
+      }),
+    [materialSettings]
+  );
+
+  const highlightedMaterial = useMemo(
+    () =>
+      new THREE.LineBasicMaterial({
+        color: materialSettings.highlightedColor,
+        transparent: false,
+        opacity: 1.0,
+      }),
+    [materialSettings]
+  );
+
+  const { curveHeightScale } = materialSettings;
+
+  const curves = useMemo(() => {
+    const results: Array<{
+      key: string;
+      geometry: THREE.BufferGeometry;
+      highlighted: boolean;
+    }> = [];
+
+    connections.forEach(conn => {
+      const fromPosition = new THREE.Vector3(conn.from.position.x, conn.from.position.y, conn.from.position.z);
+      const toPosition = new THREE.Vector3(conn.to.position.x, conn.to.position.y, conn.to.position.z);
+
+      const forwardVector = toPosition.clone().sub(fromPosition);
+      const distance = forwardVector.length();
+
+      const forwardDirection = distance > 0 ? forwardVector.clone().normalize() : new THREE.Vector3(1, 0, 0);
+      const globalUp = new THREE.Vector3(0, 1, 0);
+
+      let planeNormal = forwardDirection.clone().cross(globalUp);
+      if (planeNormal.lengthSq() === 0) {
+        planeNormal = forwardDirection.clone().cross(new THREE.Vector3(1, 0, 0));
+      }
+      planeNormal.normalize();
+
+      const curveUp = planeNormal.clone().cross(forwardDirection).normalize();
+
+      const curveHeight = distance > 0 ? Math.max(distance * curveHeightScale, 1e15) : 1e15;
+
+      const positions = new Float32Array((curveSegments + 1) * 3);
+
+      for (let segment = 0; segment <= curveSegments; segment += 1) {
+        const t = segment / curveSegments;
+        const basePoint = fromPosition.clone().addScaledVector(forwardDirection, distance * t);
+        const offset = Math.sin(Math.PI * t) * curveHeight;
+        basePoint.addScaledVector(curveUp, offset);
+
+        const index = segment * 3;
+        positions[index] = basePoint.x;
+        positions[index + 1] = basePoint.y;
+        positions[index + 2] = basePoint.z;
+      }
+
+      const segmentPositions = new Float32Array(curveSegments * 2 * 3);
+      for (let segment = 0; segment < curveSegments; segment += 1) {
+        const startIndex = segment * 3;
+        const endIndex = (segment + 1) * 3;
+        const destIndex = segment * 6;
+
+        segmentPositions[destIndex] = positions[startIndex];
+        segmentPositions[destIndex + 1] = positions[startIndex + 1];
+        segmentPositions[destIndex + 2] = positions[startIndex + 2];
+        segmentPositions[destIndex + 3] = positions[endIndex];
+        segmentPositions[destIndex + 4] = positions[endIndex + 1];
+        segmentPositions[destIndex + 5] = positions[endIndex + 2];
+      }
+
+      const isHighlighted =
+        (highlightedRegionId !== null &&
+          conn.from.regionID === highlightedRegionId &&
+          conn.to.regionID === highlightedRegionId) ||
+        highlightedSystemIds.has(conn.from._key) ||
+        highlightedSystemIds.has(conn.to._key);
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(segmentPositions, 3));
+
+      results.push({
+        key: `${conn.from._key}-${conn.to._key}`,
+        geometry,
+        highlighted: isHighlighted,
+      });
+    });
+
+    return results;
+  }, [connections, curveHeightScale, highlightedRegionId, highlightedSystemIds]);
+
+  useEffect(() => {
+    return () => {
+      curves.forEach(curve => {
+        curve.geometry.dispose();
+      });
+    };
+  }, [curves]);
+
+  return (
+    <>
+      {curves.map(curve => (
+        <lineSegments
+          key={curve.key}
+          geometry={curve.geometry}
+          material={curve.highlighted ? highlightedMaterial : normalMaterial}
+        />
+      ))}
+    </>
+  );
+}
+
 // 选中系统的白圈指示器
 function SelectionRing({ system }: { system: SolarSystem }) {
   const ringRef = useRef<THREE.Mesh>(null);
@@ -510,6 +686,91 @@ function SelectionRing({ system }: { system: SolarSystem }) {
       <ringGeometry args={[ringRadius, ringRadius + ringThickness, 64]} />
       <meshBasicMaterial color="white" side={THREE.DoubleSide} transparent opacity={0.9} />
     </mesh>
+  );
+}
+
+function JumpDriveReachableRing({
+  system,
+  color,
+  opacity,
+  scale,
+}: {
+  system: SolarSystem;
+  color: string;
+  opacity: number;
+  scale: number;
+}) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  const { camera } = useThree();
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const baseRadius = SYSTEM_POINT_SIZE * 1.2 * safeScale;
+  const ringThickness = baseRadius * 0.05;
+
+  useFrame(() => {
+    if (ringRef.current) {
+      ringRef.current.lookAt(camera.position);
+    }
+  });
+
+  return (
+    <mesh
+      ref={ringRef}
+      position={[system.position.x, system.position.y, system.position.z]}
+      raycast={() => null}
+      renderOrder={-1}
+    >
+      <ringGeometry args={[Math.max(baseRadius - ringThickness, 0), baseRadius, 64]} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+        depthTest={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  );
+}
+
+// 跳跃引擎可达范围泡泡
+function JumpDriveBubble({
+  origin,
+  radius,
+  color,
+  opacity,
+}: {
+  origin: THREE.Vector3;
+  radius: number;
+  color: string;
+  opacity: number;
+  wireframeOpacity: number;
+}) {
+  const safeRadius = Number.isFinite(radius) && radius > 0 ? radius : 1e12;
+  const geometry = useMemo(() => new THREE.SphereGeometry(safeRadius, 64, 64), [safeRadius]);
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+    };
+  }, [geometry]);
+
+  const surfaceOpacity = Math.min(Math.max(opacity, 0), 1);
+
+  return (
+    <group position={[origin.x, origin.y, origin.z]}>
+      <mesh geometry={geometry} raycast={() => null} renderOrder={-1}>
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={surfaceOpacity}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -549,12 +810,11 @@ function RegionLabel({
     return center;
   }, [region, systems]);
 
-  // 设置半透明效果的函数
   const setMaterialOpacity = useCallback(() => {
     if (textRef.current?.material && !opacitySetRef.current) {
       const setOpacity = (mat: THREE.Material) => {
         mat.transparent = true;
-        mat.opacity = 0.4; // 20% 不透明度
+        mat.opacity = 0.5;
       };
       
       if (Array.isArray(textRef.current.material)) {
@@ -573,22 +833,15 @@ function RegionLabel({
       
       const distanceToCamera = camera.position.distanceTo(regionCenter);
       
-      // 如果距离太远，隐藏标签
-      const maxLabelDistance = 1e19;
-      if (distanceToCamera > maxLabelDistance) {
-        textRef.current.visible = false;
-        return;
-      }
-      
       // 确保标签可见
-      textRef.current.visible = isHighlighted;
+      textRef.current.visible = true;
       
       // 计算从星域中心到相机的方向
       const toCamera = new THREE.Vector3().subVectors(camera.position, regionCenter);
       const cameraDirection = toCamera.clone().normalize();
       
       // 计算标签位置（在垂直于相机方向的平面上）
-      const up = new THREE.Vector3(0, 1, 0);
+      const up = new THREE.Vector3(0, 20, 0);
       const rightDirection = new THREE.Vector3();
       rightDirection.crossVectors(up, cameraDirection).normalize();
       
@@ -603,13 +856,13 @@ function RegionLabel({
       textRef.current.lookAt(camera.position);
       
       // 根据距离调整大小
-      const scale = distanceToCamera / 3e16;
+      const scale = distanceToCamera / (isHighlighted ? 1e17 : 2e17);
       textRef.current.scale.setScalar(scale);
     }
   });
 
   const regionName = language === 'zh' ? region.name.zh || region.name.en : region.name.en || region.name.zh;
-  const labelColor = isHighlighted ? (style?.labelColor || '#ffff00') : '#8888ff'; // 高亮时黄色，普通时蓝色
+  const labelColor = isHighlighted ? (style?.labelColor || '#ffff00') : '#ffffff'; // 高亮时黄色，普通时蓝色
 
   return (
     <Text
@@ -725,6 +978,7 @@ function SolarSystemLabel({
 function Scene({
   systems,
   stargates,
+  jumpgates = [],
   regions,
   onSystemClick,
   highlightedRegionId,
@@ -740,9 +994,11 @@ function Scene({
   systemFilter,
   mapControl,
   externalHighlightedRegionId,
+  jumpDriveConfig,
 }: {
   systems: SolarSystem[];
   stargates: Stargate[];
+  jumpgates?: Jumpgate[];
   regions?: Region[];
   onSystemClick: (system: SolarSystem) => void;
   highlightedRegionId: number | null;
@@ -751,16 +1007,28 @@ function Scene({
   systemRenderConfigs?: SystemRenderConfig[];
   securityColors?: SecurityColorConfig;
   language: Language;
-  style?: { connectionLineColor?: string; connectionLineOpacity?: number; highlightedConnectionLineColor?: string; labelFontSize?: number; labelColor?: string; backgroundColor?: string };
+  style?: {
+    connectionLineColor?: string;
+    connectionLineOpacity?: number;
+    highlightedConnectionLineColor?: string;
+    jumpgateLineColor?: string;
+    jumpgateLineOpacity?: number;
+    highlightedJumpgateLineColor?: string;
+    labelFontSize?: number;
+    labelColor?: string;
+    backgroundColor?: string;
+  };
   focus?: FocusConfig;
   onFocusComplete?: (config: FocusConfig) => void;
   filterNewEdenOnly?: boolean;
   systemFilter?: (system: SolarSystem) => boolean;
   mapControl?: MapControl;
   externalHighlightedRegionId?: number | null;
+  jumpDriveConfig?: JumpDriveConfig;
 }) {
   const [filteredSystems, setFilteredSystems] = useState<SolarSystem[]>([]);
   const [connections, setConnections] = useState<Array<{ from: SolarSystem; to: SolarSystem }>>([]);
+  const [jumpgateConnections, setJumpgateConnections] = useState<Array<{ from: SolarSystem; to: SolarSystem }>>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null);
   const cameraInitializedRef = useRef(false);
@@ -796,6 +1064,91 @@ function Scene({
     });
     return map;
   }, [systems]);
+
+  const jumpDriveState = useMemo(() => {
+    if (!jumpDriveConfig) return null;
+
+    const rangeLightYears = jumpDriveConfig.rangeLightYears;
+    if (!Number.isFinite(rangeLightYears) || rangeLightYears <= 0) {
+      return null;
+    }
+
+    let originVector: THREE.Vector3 | null = null;
+    let originSystemId: number | null = null;
+
+    if (jumpDriveConfig.originSystemId !== undefined) {
+      const originSystem = systemMap.get(jumpDriveConfig.originSystemId);
+      if (originSystem) {
+        originVector = new THREE.Vector3(
+          originSystem.position.x,
+          originSystem.position.y,
+          originSystem.position.z
+        );
+        originSystemId = originSystem._key;
+      }
+    }
+
+    if (!originVector && jumpDriveConfig.originPosition) {
+      const { x, y, z } = jumpDriveConfig.originPosition;
+      if ([x, y, z].every(value => Number.isFinite(value))) {
+        originVector = new THREE.Vector3(x, y, z);
+      }
+    }
+
+    if (!originVector) {
+      return null;
+    }
+
+    const rangeMeters = rangeLightYears * JUMP_DRIVE_LIGHTYEAR_IN_METERS;
+    if (!Number.isFinite(rangeMeters) || rangeMeters <= 0) {
+      return null;
+    }
+
+    const rangeSquared = rangeMeters * rangeMeters;
+    const reachableSystems = filteredSystems.filter(system => {
+      if (!Number.isFinite(system.securityStatus) || system.securityStatus >= 0.45) {
+        return false;
+      }
+      const dx = system.position.x - originVector!.x;
+      const dy = system.position.y - originVector!.y;
+      const dz = system.position.z - originVector!.z;
+      return dx * dx + dy * dy + dz * dz <= rangeSquared;
+    });
+
+    return {
+      origin: originVector,
+      rangeMeters,
+      reachableSystems,
+      originSystemId,
+    };
+  }, [jumpDriveConfig, filteredSystems, systemMap]);
+
+  const effectiveSystemRenderConfigs = useMemo(
+    () => (systemRenderConfigs ? [...systemRenderConfigs] : undefined),
+    [systemRenderConfigs]
+  );
+
+  const jumpDriveHighlightData = useMemo(() => {
+    if (!jumpDriveState || jumpDriveConfig?.showReachableSystems === false) {
+      return undefined;
+    }
+
+    const systems = jumpDriveState.reachableSystems;
+    if (systems.length === 0) {
+      return undefined;
+    }
+
+    const color = jumpDriveConfig?.reachableSystemColor ?? '#00ffff';
+    const scale = Math.max(jumpDriveConfig?.reachableSystemSizeMultiplier ?? 1.6, 1.05);
+    const opacity = Math.min(Math.max(jumpDriveConfig?.reachableSystemOpacity ?? 0.8, 0), 1);
+
+    return {
+      systems,
+      color,
+      scale,
+      opacity,
+    };
+  }, [jumpDriveState, jumpDriveConfig]);
 
   useEffect(() => {
     let filtered = filterNewEdenOnly !== false ? systems.filter(s => isNewEdenSystem(s._key)) : systems;
@@ -835,6 +1188,40 @@ function Scene({
 
     setConnections(newConnections);
   }, [filteredSystems, stargates, systemMap]);
+
+  useEffect(() => {
+    if (filteredSystems.length === 0 || !jumpgates || jumpgates.length === 0) {
+      setJumpgateConnections([]);
+      return;
+    }
+
+    const newConnections: Array<{ from: SolarSystem; to: SolarSystem }> = [];
+    const systemSet = new Set(filteredSystems.map(s => s._key));
+    const connectionSet = new Set<string>();
+
+    jumpgates.forEach(({ fromSystemId, toSystemId }) => {
+      const fromSystem = systemMap.get(fromSystemId);
+      const toSystem = systemMap.get(toSystemId);
+
+      if (
+        fromSystem &&
+        toSystem &&
+        systemSet.has(fromSystem._key) &&
+        systemSet.has(toSystem._key)
+      ) {
+        const minId = Math.min(fromSystem._key, toSystem._key);
+        const maxId = Math.max(fromSystem._key, toSystem._key);
+        const connectionKey = `${minId}-${maxId}`;
+
+        if (!connectionSet.has(connectionKey)) {
+          connectionSet.add(connectionKey);
+          newConnections.push({ from: fromSystem, to: toSystem });
+        }
+      }
+    });
+
+    setJumpgateConnections(newConnections);
+  }, [filteredSystems, jumpgates, systemMap]);
 
   // 初始相机定位（只在首次加载时执行一次）
   useEffect(() => {
@@ -1023,6 +1410,25 @@ function Scene({
       <ambientLight intensity={0.5} />
       <pointLight position={[0, 0, 0]} intensity={1} />
 
+      {jumpDriveState && jumpDriveConfig?.showBubble !== false && (
+        <JumpDriveBubble
+          origin={jumpDriveState.origin}
+          radius={jumpDriveState.rangeMeters}
+          color={jumpDriveConfig?.bubbleColor ?? '#00ffff'}
+          opacity={jumpDriveConfig?.bubbleOpacity ?? 0.12}
+        wireframeOpacity={jumpDriveConfig?.bubbleWireframeOpacity ?? 0}
+        />
+      )}
+
+      {jumpgateConnections.length > 0 && (
+        <JumpgateConnections
+          connections={jumpgateConnections}
+          highlightedRegionId={highlightedRegionId}
+          highlightedSystemIds={highlightedSystemIds}
+          style={style}
+        />
+      )}
+
       {connections.length > 0 && (
         <StargateConnections
           connections={connections}
@@ -1038,8 +1444,10 @@ function Scene({
           onSystemClick={onSystemClick}
           highlightedRegionId={highlightedRegionId}
           highlightedSystemIds={highlightedSystemIds}
-          systemRenderConfigs={systemRenderConfigs}
+          systemRenderConfigs={effectiveSystemRenderConfigs}
           securityColors={securityColors}
+          jumpDriveHighlight={jumpDriveHighlightData}
+          jumpDriveConfig={jumpDriveConfig}
         />
       )}
 
@@ -1110,6 +1518,7 @@ function Scene({
 export default function EveMap3D({
   systems,
   stargates,
+  jumpgates = [],
   regions,
   language = 'zh',
   systemRenderConfigs,
@@ -1123,6 +1532,7 @@ export default function EveMap3D({
   containerStyle,
   containerClassName,
   mapControl,
+  jumpDriveConfig,
 }: EveMap3DProps) {
   const [highlightedSystemIds, setHighlightedSystemIds] = useState<Set<number>>(new Set());
   const [selectedSystemId, setSelectedSystemId] = useState<number | null>(null);
@@ -1229,6 +1639,7 @@ export default function EveMap3D({
         <Scene
           systems={systems}
           stargates={stargates}
+          jumpgates={jumpgates}
           regions={regions}
           onSystemClick={handleSystemClick}
           highlightedRegionId={highlightedRegionId}
@@ -1244,6 +1655,7 @@ export default function EveMap3D({
           systemFilter={systemFilter}
           mapControl={mapControl}
           externalHighlightedRegionId={externalHighlightedRegionId}
+          jumpDriveConfig={jumpDriveConfig}
         />
       </Canvas>
     </div>
