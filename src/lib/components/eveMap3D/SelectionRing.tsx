@@ -17,7 +17,7 @@ export function SelectionRing({ system }: { system: SolarSystem }) {
 	});
 
 	return (
-		<mesh ref={ringRef} position={[system.position.x, system.position.y, system.position.z]}>
+		<mesh ref={ringRef} position={[-system.position.x, -system.position.y, system.position.z]}>
 			<ringGeometry args={[ringRadius, ringRadius + ringThickness, 64]} />
 			<meshBasicMaterial color="white" side={THREE.DoubleSide} transparent opacity={0.9} />
 		</mesh>

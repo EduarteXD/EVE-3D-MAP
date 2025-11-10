@@ -60,8 +60,8 @@ export function JumpgateConnections({
 		}> = [];
 
 		connections.forEach((conn) => {
-			const fromPosition = new THREE.Vector3(conn.from.position.x, conn.from.position.y, conn.from.position.z);
-			const toPosition = new THREE.Vector3(conn.to.position.x, conn.to.position.y, conn.to.position.z);
+			const fromPosition = new THREE.Vector3(-conn.from.position.x, -conn.from.position.y, conn.from.position.z);
+			const toPosition = new THREE.Vector3(-conn.to.position.x, -conn.to.position.y, conn.to.position.z);
 
 			const forwardVector = toPosition.clone().sub(fromPosition);
 			const distance = forwardVector.length();

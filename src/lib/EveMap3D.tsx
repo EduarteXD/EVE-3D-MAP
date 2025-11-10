@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
-import type { EveMap3DProps, SolarSystem } from './types';
+import type { EveMap3DProps, Region, SolarSystem } from './types';
 import { Scene } from './components/eveMap3D/Scene';
+import { Compass2DOverlay } from './components/eveMap3D/Compass2D';
 
 // 主组件
 export default function EveMap3D({
@@ -26,6 +27,7 @@ export default function EveMap3D({
   const [highlightedSystemIds, setHighlightedSystemIds] = useState<Set<number>>(new Set());
   const [selectedSystemId, setSelectedSystemId] = useState<number | null>(null);
   const [internalHighlightedRegionId, setInternalHighlightedRegionId] = useState<number | null>(null);
+  const [compassRotation, setCompassRotation] = useState(0);
 
   // 使用外部传入的highlightedRegionId，如果没有则使用内部状态或focus
   const highlightedRegionId = useMemo(() => {
@@ -111,6 +113,16 @@ export default function EveMap3D({
     [events]
   );
 
+  const handleRegionClick = useCallback(
+    (region: Region) => {
+      // 调用外部回调
+      if (events?.onRegionClick) {
+        events.onRegionClick(region);
+      }
+    },
+    [events]
+  );
+
   return (
     <div
       style={{ width: '100%', height: '100%', position: 'relative', ...containerStyle }}
@@ -131,6 +143,7 @@ export default function EveMap3D({
           jumpgates={jumpgates}
           regions={regions}
           onSystemClick={handleSystemClick}
+          onRegionClick={handleRegionClick}
           highlightedRegionId={highlightedRegionId}
           highlightedSystemIds={highlightedSystemIds}
           selectedSystemId={selectedSystemId}
@@ -145,8 +158,10 @@ export default function EveMap3D({
           mapControl={mapControl}
           externalHighlightedRegionId={externalHighlightedRegionId}
           jumpDriveConfig={jumpDriveConfig}
+          onCompassRotationChange={setCompassRotation}
         />
       </Canvas>
+      <Compass2DOverlay rotation={compassRotation} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Language, Region, SolarSystem } from '../../types';
@@ -10,27 +10,29 @@ export function RegionLabel({
 	language,
 	style,
 	isHighlighted = false,
+	onClick,
 }: {
 	region: Region;
 	systems: SolarSystem[];
 	language: Language;
 	style?: { labelFontSize?: number; labelColor?: string };
 	isHighlighted?: boolean;
+	onClick?: (region: Region) => void;
 }) {
 	const textRef = useRef<THREE.Mesh>(null);
 	const opacitySetRef = useRef(false);
 	const { camera } = useThree();
 	const baseFontSize = (style?.labelFontSize || 2e15) * 1.5;
-	const labelOffset = 1e15 * 5;
+	const labelOffset = 5e15;
 
 	const regionCenter = useMemo(() => {
 		const regionSystems = systems.filter((s) => s.regionID === region._key);
 		if (regionSystems.length === 0) {
-			return new THREE.Vector3(region.position.x, region.position.y, region.position.z);
+			return new THREE.Vector3(-region.position.x, -region.position.y, region.position.z);
 		}
 		const center = new THREE.Vector3(0, 0, 0);
 		regionSystems.forEach((system) => {
-			center.add(new THREE.Vector3(system.position.x, system.position.y, system.position.z));
+			center.add(new THREE.Vector3(-system.position.x, -system.position.y, system.position.z));
 		});
 		center.divideScalar(regionSystems.length);
 		return center;
@@ -63,7 +65,10 @@ export function RegionLabel({
 			rightDirection.crossVectors(up, cameraDirection).normalize();
 			const labelPosition = new THREE.Vector3().copy(regionCenter).add(rightDirection.clone().multiplyScalar(labelOffset)).add(up.clone().multiplyScalar(labelOffset * 0.5));
 			textRef.current.position.copy(labelPosition);
-			textRef.current.lookAt(camera.position);
+			
+			// 使标签完全面向摄像机，平行于屏幕
+			textRef.current.quaternion.copy(camera.quaternion);
+			
 			const scale = distanceToCamera / (isHighlighted ? 1e17 : 2e17);
 			textRef.current.scale.setScalar(scale);
 		}
@@ -71,6 +76,13 @@ export function RegionLabel({
 
 	const regionName = language === 'zh' ? region.name.zh || region.name.en : region.name.en || region.name.zh;
 	const labelColor = isHighlighted ? (style?.labelColor || '#ffff00') : '#ffffff';
+
+	const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
+		e.stopPropagation();
+		if (onClick) {
+			onClick(region);
+		}
+	}, [onClick, region]);
 
 	return (
 		<Text
@@ -82,6 +94,15 @@ export function RegionLabel({
 			anchorY="middle"
 			outlineWidth={0.1}
 			outlineColor="#000"
+			onClick={handleClick}
+			onPointerOver={() => {
+				if (textRef.current) {
+					document.body.style.cursor = 'pointer';
+				}
+			}}
+			onPointerOut={() => {
+				document.body.style.cursor = 'auto';
+			}}
 		>
 			{regionName || `Region ${region._key}`}
 		</Text>

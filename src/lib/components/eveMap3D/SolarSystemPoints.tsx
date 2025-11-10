@@ -182,7 +182,7 @@ export function SolarSystemPoints({
 
 		if (highsecNormalRef.current) {
 			systemGroups.highsec.normal.forEach((system, index) => {
-				matrix.setPosition(system.position.x, system.position.y, system.position.z);
+				matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 				highsecNormalRef.current!.setMatrixAt(index, matrix);
 			});
 			highsecNormalRef.current.instanceMatrix.needsUpdate = true;
@@ -190,7 +190,7 @@ export function SolarSystemPoints({
 
 		if (highsecHighlightRef.current) {
 			systemGroups.highsec.highlighted.forEach((system, index) => {
-				matrix.setPosition(system.position.x, system.position.y, system.position.z);
+				matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 				highsecHighlightRef.current!.setMatrixAt(index, matrix);
 			});
 			highsecHighlightRef.current.instanceMatrix.needsUpdate = true;
@@ -198,7 +198,7 @@ export function SolarSystemPoints({
 
 		if (lowsecNormalRef.current) {
 			systemGroups.lowsec.normal.forEach((system, index) => {
-				matrix.setPosition(system.position.x, system.position.y, system.position.z);
+				matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 				lowsecNormalRef.current!.setMatrixAt(index, matrix);
 			});
 			lowsecNormalRef.current.instanceMatrix.needsUpdate = true;
@@ -206,7 +206,7 @@ export function SolarSystemPoints({
 
 		if (lowsecHighlightRef.current) {
 			systemGroups.lowsec.highlighted.forEach((system, index) => {
-				matrix.setPosition(system.position.x, system.position.y, system.position.z);
+				matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 				lowsecHighlightRef.current!.setMatrixAt(index, matrix);
 			});
 			lowsecHighlightRef.current.instanceMatrix.needsUpdate = true;
@@ -214,7 +214,7 @@ export function SolarSystemPoints({
 
 		if (nullsecNormalRef.current) {
 			systemGroups.nullsec.normal.forEach((system, index) => {
-				matrix.setPosition(system.position.x, system.position.y, system.position.z);
+				matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 				nullsecNormalRef.current!.setMatrixAt(index, matrix);
 			});
 			nullsecNormalRef.current.instanceMatrix.needsUpdate = true;
@@ -222,7 +222,7 @@ export function SolarSystemPoints({
 
 		if (nullsecHighlightRef.current) {
 			systemGroups.nullsec.highlighted.forEach((system, index) => {
-				matrix.setPosition(system.position.x, system.position.y, system.position.z);
+				matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 				nullsecHighlightRef.current!.setMatrixAt(index, matrix);
 			});
 			nullsecHighlightRef.current.instanceMatrix.needsUpdate = true;
@@ -232,7 +232,7 @@ export function SolarSystemPoints({
 			const ref = customSystemsRefs.current.get(key);
 			if (ref) {
 				items.forEach(({ system }, index) => {
-					matrix.setPosition(system.position.x, system.position.y, system.position.z);
+					matrix.setPosition(-system.position.x, -system.position.y, system.position.z);
 					ref.setMatrixAt(index, matrix);
 				});
 				ref.instanceMatrix.needsUpdate = true;

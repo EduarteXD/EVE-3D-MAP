@@ -287,6 +287,14 @@ function App() {
               setHasUserSelectedRegion(false)
             }
           },
+          onRegionClick: (region) => {
+            setHighlightedRegionId(region._key)
+            setHasUserSelectedRegion(true)
+            // 点击星域时，清除选中的星系
+            setSelectedSystem(null)
+            // 聚焦到该星域
+            mapControl.focusRegion?.(region._key)
+          },
         }}
       />
 

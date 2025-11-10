@@ -39,11 +39,11 @@ export function StargateConnections({
 
 		normalConnections.forEach((conn) => {
 			positions.push(
-				conn.from.position.x,
-				conn.from.position.y,
+				-conn.from.position.x,
+				-conn.from.position.y,
 				conn.from.position.z,
-				conn.to.position.x,
-				conn.to.position.y,
+				-conn.to.position.x,
+				-conn.to.position.y,
 				conn.to.position.z,
 			);
 		});
@@ -58,11 +58,11 @@ export function StargateConnections({
 
 		highlightedConnections.forEach((conn) => {
 			positions.push(
-				conn.from.position.x,
-				conn.from.position.y,
+				-conn.from.position.x,
+				-conn.from.position.y,
 				conn.from.position.z,
-				conn.to.position.x,
-				conn.to.position.y,
+				-conn.to.position.x,
+				-conn.to.position.y,
 				conn.to.position.z,
 			);
 		});

@@ -28,7 +28,7 @@ export function JumpDriveReachableRing({
 	});
 
 	return (
-		<mesh ref={ringRef} position={[system.position.x, system.position.y, system.position.z]} raycast={() => null} renderOrder={-1}>
+		<mesh ref={ringRef} position={[-system.position.x, -system.position.y, system.position.z]} raycast={() => null} renderOrder={-1}>
 			<ringGeometry args={[Math.max(baseRadius - ringThickness, 0), baseRadius, 64]} />
 			<meshBasicMaterial
 				color={color}

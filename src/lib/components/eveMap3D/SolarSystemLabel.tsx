@@ -26,7 +26,7 @@ export function SolarSystemLabel({
 
 	useFrame(() => {
 		if (textRef.current) {
-			const systemPosition = new THREE.Vector3(system.position.x, system.position.y, system.position.z);
+			const systemPosition = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
 			const distanceToCamera = camera.position.distanceTo(systemPosition);
 			if (isHighlightedRegion && distanceToCamera > maxGrayLabelDistance) {
 				textRef.current.visible = false;
@@ -41,7 +41,10 @@ export function SolarSystemLabel({
 			const labelPosition = new THREE.Vector3().copy(systemPosition).add(rightDirection.clone().multiplyScalar(labelOffset));
 			positionRef.current.copy(labelPosition);
 			textRef.current.position.copy(labelPosition);
-			textRef.current.lookAt(camera.position);
+			
+			// 使标签完全面向摄像机，平行于屏幕
+			textRef.current.quaternion.copy(camera.quaternion);
+			
 			const scale = distanceToCamera / 3e16;
 			textRef.current.scale.setScalar(scale);
 		}
@@ -54,7 +57,7 @@ export function SolarSystemLabel({
 	return (
 		<Text
 			ref={textRef}
-			position={[system.position.x + labelOffset, system.position.y, system.position.z]}
+			position={[-system.position.x + labelOffset, -system.position.y, system.position.z]}
 			fontSize={fontSize}
 			color={labelColor}
 			anchorX="left"

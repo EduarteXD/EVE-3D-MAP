@@ -24,6 +24,7 @@ import { SolarSystemPoints } from './SolarSystemPoints';
 import { SelectionRing } from './SelectionRing';
 import { SolarSystemLabel } from './SolarSystemLabel';
 import { RegionLabel } from './RegionLabel';
+import { Compass2DInternal } from './Compass2D';
 
 export function Scene({
 	systems,
@@ -31,6 +32,7 @@ export function Scene({
 	jumpgates = [],
 	regions,
 	onSystemClick,
+	onRegionClick,
 	highlightedRegionId,
 	highlightedSystemIds,
 	selectedSystemId,
@@ -45,12 +47,14 @@ export function Scene({
 	mapControl,
 	externalHighlightedRegionId,
 	jumpDriveConfig,
+	onCompassRotationChange,
 }: {
 	systems: SolarSystem[];
 	stargates: Stargate[];
 	jumpgates?: Jumpgate[];
 	regions?: Region[];
 	onSystemClick: (system: SolarSystem) => void;
+	onRegionClick?: (region: Region) => void;
 	highlightedRegionId: number | null;
 	highlightedSystemIds: Set<number>;
 	selectedSystemId: number | null;
@@ -65,6 +69,7 @@ export function Scene({
 	mapControl?: MapControl;
 	externalHighlightedRegionId?: number | null;
 	jumpDriveConfig?: JumpDriveConfig;
+	onCompassRotationChange?: (rotation: number) => void;
 }) {
 	const [filteredSystems, setFilteredSystems] = useState<SolarSystem[]>([]);
 	const [connections, setConnections] = useState<Array<{ from: SolarSystem; to: SolarSystem }>>([]);
@@ -112,7 +117,7 @@ export function Scene({
 		if (jumpDriveConfig.originSystemId !== undefined) {
 			const originSystem = systemMap.get(jumpDriveConfig.originSystemId);
 			if (originSystem) {
-				originVector = new THREE.Vector3(originSystem.position.x, originSystem.position.y, originSystem.position.z);
+				originVector = new THREE.Vector3(-originSystem.position.x, -originSystem.position.y, originSystem.position.z);
 				originSystemId = originSystem._key;
 			}
 		}
@@ -134,8 +139,8 @@ export function Scene({
 			if (!Number.isFinite(system.securityStatus) || system.securityStatus >= 0.45) {
 				return false;
 			}
-			const dx = system.position.x - originVector!.x;
-			const dy = system.position.y - originVector!.y;
+			const dx = -system.position.x - originVector!.x;
+			const dy = -system.position.y - originVector!.y;
 			const dz = system.position.z - originVector!.z;
 			return dx * dx + dy * dy + dz * dz <= rangeSquared;
 		});
@@ -227,7 +232,7 @@ export function Scene({
 		if (highlightedRegionId !== null || focus) return;
 		const box = new THREE.Box3();
 		filteredSystems.forEach((system) => {
-			const pos = new THREE.Vector3(system.position.x, system.position.y, system.position.z);
+			const pos = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
 			box.expandByPoint(pos);
 		});
 		const center = new THREE.Vector3();
@@ -235,7 +240,7 @@ export function Scene({
 		const boxSize = box.getSize(new THREE.Vector3());
 		const maxSize = Math.max(boxSize.x, boxSize.y, boxSize.z);
 		const cameraDistance = maxSize * 1.5;
-		const initialPosition = new THREE.Vector3(center.x, center.y + cameraDistance * 0.5, center.z + cameraDistance * 0.8);
+		const initialPosition = new THREE.Vector3(center.x, center.y + cameraDistance * 0.5, center.z - cameraDistance * 0.8);
 		controlsRef.current.target.copy(center);
 		controlsRef.current.object.position.copy(initialPosition);
 		controlsRef.current.update();
@@ -259,7 +264,7 @@ export function Scene({
 		if (regionSystems.length === 0) return;
 		const box = new THREE.Box3();
 		regionSystems.forEach((system) => {
-			const pos = new THREE.Vector3(system.position.x, system.position.y, system.position.z);
+			const pos = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
 			box.expandByPoint(pos);
 		});
 		const targetCenter = new THREE.Vector3();
@@ -267,7 +272,7 @@ export function Scene({
 		const boxSize = box.getSize(new THREE.Vector3());
 		const maxSize = Math.max(boxSize.x, boxSize.y, boxSize.z);
 		const cameraDistance = maxSize * 1.5;
-		const targetPosition = new THREE.Vector3(targetCenter.x, targetCenter.y + cameraDistance * 0.5, targetCenter.z + cameraDistance * 0.8);
+		const targetPosition = new THREE.Vector3(targetCenter.x, targetCenter.y + cameraDistance * 0.5, targetCenter.z - cameraDistance * 0.8);
 		const startTarget = controlsRef.current.target.clone();
 		const startPosition = camera.position.clone();
 		const duration = 1500;
@@ -309,7 +314,7 @@ export function Scene({
 		if (targetSystems.length === 0) return;
 		const box = new THREE.Box3();
 		targetSystems.forEach((system) => {
-			const pos = new THREE.Vector3(system.position.x, system.position.y, system.position.z);
+			const pos = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
 			box.expandByPoint(pos);
 		});
 		const targetCenter = new THREE.Vector3();
@@ -317,7 +322,7 @@ export function Scene({
 		const boxSize = box.getSize(new THREE.Vector3());
 		const maxSize = Math.max(boxSize.x, boxSize.y, boxSize.z);
 		const cameraDistance = maxSize * 1.5;
-		const targetPosition = new THREE.Vector3(targetCenter.x, targetCenter.y + cameraDistance * 0.5, targetCenter.z + cameraDistance * 0.8);
+		const targetPosition = new THREE.Vector3(targetCenter.x, targetCenter.y + cameraDistance * 0.5, targetCenter.z - cameraDistance * 0.8);
 		const startTarget = controlsRef.current.target.clone();
 		const startPosition = camera.position.clone();
 		const duration = focus.animationDuration || 1500;
@@ -399,9 +404,10 @@ export function Scene({
 						return filteredSystems.some((system) => system.regionID === region._key);
 					})
 					.map((region) => (
-						<RegionLabel key={region._key} region={region} systems={filteredSystems} language={language} style={style} isHighlighted={highlightedRegionId === region._key} />
+						<RegionLabel key={region._key} region={region} systems={filteredSystems} language={language} style={style} isHighlighted={highlightedRegionId === region._key} onClick={onRegionClick} />
 					))}
-			<OrbitControls ref={controlsRef} enablePan={true} enableZoom={true} enableRotate={true} minDistance={1e15} maxDistance={1e19} autoRotate={false} />
+			<OrbitControls ref={controlsRef} enablePan={true} enableZoom={true} enableRotate={true} minDistance={1e15} maxDistance={1e18} autoRotate={false} zoomSpeed={-1} />
+			{onCompassRotationChange && <Compass2DInternal onRotationChange={onCompassRotationChange} />}
 		</>
 	);
 }

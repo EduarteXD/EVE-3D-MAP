@@ -116,6 +116,8 @@ export interface FocusConfig {
 export interface EveMap3DEvents {
   /** 点击星系时触发 */
   onSystemClick?: (system: SolarSystem) => void;
+  /** 点击星域标签时触发 */
+  onRegionClick?: (region: Region) => void;
   /** 聚焦完成时触发 */
   onFocusComplete?: (config: FocusConfig) => void;
 }

@@ -84,8 +84,8 @@ export function useMapControl(): MapControl {
     // 计算星域的中心点（用于计算距离）
     let centerX = 0, centerY = 0, centerZ = 0;
     regionSystems.forEach(s => {
-      centerX += s.position.x;
-      centerY += s.position.y;
+      centerX += -s.position.x;
+      centerY += -s.position.y;
       centerZ += s.position.z;
     });
     centerX /= regionSystems.length;
@@ -95,8 +95,8 @@ export function useMapControl(): MapControl {
     // 计算边界框大小（用于确定相机距离）
     let maxDistance = 0;
     regionSystems.forEach(s => {
-      const dx = s.position.x - centerX;
-      const dy = s.position.y - centerY;
+      const dx = -s.position.x - centerX;
+      const dy = -s.position.y - centerY;
       const dz = s.position.z - centerZ;
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (distance > maxDistance) {
@@ -107,10 +107,10 @@ export function useMapControl(): MapControl {
     const cameraDistance = maxDistance * 1.5;
 
     // 目标位置：聚焦到星系本身的位置
-    const targetCenter = { x: system.position.x, y: system.position.y, z: system.position.z };
+    const targetCenter = { x: -system.position.x, y: -system.position.y, z: system.position.z };
     const targetPosition = {
-      x: system.position.x,
-      y: system.position.y + cameraDistance * 0.5,
+      x: -system.position.x,
+      y: -system.position.y + cameraDistance * 0.5,
       z: system.position.z + cameraDistance * 0.8
     };
 
@@ -180,8 +180,8 @@ export function useMapControl(): MapControl {
     // 计算星域的中心点
     let centerX = 0, centerY = 0, centerZ = 0;
     regionSystems.forEach(system => {
-      centerX += system.position.x;
-      centerY += system.position.y;
+      centerX += -system.position.x;
+      centerY += -system.position.y;
       centerZ += system.position.z;
     });
     centerX /= regionSystems.length;
@@ -191,8 +191,8 @@ export function useMapControl(): MapControl {
     // 计算边界框大小
     let maxDistance = 0;
     regionSystems.forEach(system => {
-      const dx = system.position.x - centerX;
-      const dy = system.position.y - centerY;
+      const dx = -system.position.x - centerX;
+      const dy = -system.position.y - centerY;
       const dz = system.position.z - centerZ;
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (distance > maxDistance) {
