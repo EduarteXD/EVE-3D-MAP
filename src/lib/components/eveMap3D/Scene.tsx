@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useThree } from '@react-three/fiber';
-import { OrbitControls, Stars } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type {
 	EveMap3DProps,
@@ -25,6 +25,7 @@ import { SelectionRing } from './SelectionRing';
 import { SolarSystemLabel } from './SolarSystemLabel';
 import { RegionLabel } from './RegionLabel';
 import { Compass2DInternal } from './Compass2D';
+import { HomeIcon } from './HomeIcon';
 
 export function Scene({
 	systems,
@@ -356,7 +357,6 @@ export function Scene({
 
 	return (
 		<>
-			<Stars radius={1e18} depth={50} count={5000} factor={4} fade speed={1} />
 			<ambientLight intensity={0.5} />
 			<pointLight position={[0, 0, 0]} intensity={1} />
 			{jumpDriveState && jumpDriveConfig?.showBubble !== false && (
@@ -385,6 +385,12 @@ export function Scene({
 					const selectedSystem = filteredSystems.find((s) => s._key === selectedSystemId);
 					if (!selectedSystem) return null;
 					return <SelectionRing system={selectedSystem} />;
+				})()}
+			{jumpDriveState && jumpDriveState.originSystemId !== null &&
+				(() => {
+					const originSystem = filteredSystems.find((s) => s._key === jumpDriveState.originSystemId);
+					if (!originSystem) return null;
+					return <HomeIcon system={originSystem} onSystemClick={onSystemClick} />;
 				})()}
 			{highlightedRegionId !== null &&
 				filteredSystems
