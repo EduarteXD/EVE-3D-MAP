@@ -2,17 +2,17 @@
 
 一个基于 React 和 Three.js 的 EVE Online 3D 星图可视化组件库。
 
-<img width="2551" height="1337" alt="image" src="https://github.com/user-attachments/assets/a8392b0b-9ebe-4b60-812a-86e9b3edaa2d" />
+<img width="2538" height="1331" alt="image" src="https://github.com/user-attachments/assets/c6375463-2ff8-4e5a-982c-dd2b73e0891d" />
 
 ## 特性
 
-- 🎨 3D 可视化 EVE Online 星图
-- 🖱️ 交互式操作（旋转、平移、缩放）
-- 🎯 星系点击和高亮
-- 🌌 星域高亮显示
-- 🎨 自定义颜色和样式
-- 🌍 多语言支持（中文/英文）
-- ⚡ 高性能渲染（使用 InstancedMesh）
+-  3D 可视化 EVE Online 星图
+-  交互式操作（旋转、平移、缩放）
+-  星系点击和高亮
+-  星域高亮显示
+-  自定义颜色和样式
+-  多语言支持（中文/英文）
+-  高性能渲染（使用 InstancedMesh）
 
 ## 安装
 
