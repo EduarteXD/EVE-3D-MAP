@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import type { EveMap3DProps, Region, SolarSystem } from './types';
 import { Scene } from './components/eveMap3D/Scene';
 import { Compass2DOverlay } from './components/eveMap3D/Compass2D';
+import { ContextMenu, type ContextMenuItem } from './components/eveMap3D/ContextMenu';
 
 // 主组件
 export default function EveMap3D({
@@ -28,6 +29,7 @@ export default function EveMap3D({
   const [selectedSystemId, setSelectedSystemId] = useState<number | null>(null);
   const [internalHighlightedRegionId, setInternalHighlightedRegionId] = useState<number | null>(null);
   const [compassRotation, setCompassRotation] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // 使用外部传入的highlightedRegionId，如果没有则使用内部状态或focus
   const highlightedRegionId = useMemo(() => {
@@ -123,10 +125,77 @@ export default function EveMap3D({
     [events]
   );
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const contextMenuItems: ContextMenuItem[] = useMemo(() => {
+    const items: ContextMenuItem[] = [
+      {
+        label: language === 'zh' ? '重置视角' : 'Reset Camera',
+        onClick: () => {
+          if (mapControl?.resetCamera) {
+            mapControl.resetCamera();
+          }
+        },
+        disabled: !mapControl?.resetCamera,
+      },
+    ];
+
+    // 如果有选中的星系，添加相关选项
+    if (selectedSystemId !== null) {
+      const selectedSystem = systems.find(s => s._key === selectedSystemId);
+      if (selectedSystem) {
+        items.push({ label: '', onClick: () => {}, divider: true });
+        items.push({
+          label: language === 'zh' ? '取消选择' : 'Deselect',
+          onClick: () => {
+            setSelectedSystemId(null);
+            setHighlightedSystemIds(new Set());
+          },
+        });
+        items.push({
+          label: language === 'zh' ? '聚焦到星系' : 'Focus System',
+          onClick: () => {
+            if (mapControl?.focusSystem) {
+              mapControl.focusSystem(selectedSystemId);
+            }
+          },
+          disabled: !mapControl?.focusSystem,
+        });
+      }
+    }
+
+    // 如果有高亮的星域，添加相关选项
+    if (highlightedRegionId !== null) {
+      const region = regions?.find(r => r._key === highlightedRegionId);
+      if (region) {
+        items.push({ label: '', onClick: () => {}, divider: true });
+        items.push({
+          label: language === 'zh' ? '聚焦到星域' : 'Focus Region',
+          onClick: () => {
+            if (mapControl?.focusRegion) {
+              mapControl.focusRegion(highlightedRegionId);
+            }
+          },
+          disabled: !mapControl?.focusRegion,
+        });
+      }
+    }
+
+    return items;
+  }, [language, mapControl, selectedSystemId, highlightedRegionId, systems, regions]);
+
   return (
     <div
       style={{ width: '100%', height: '100%', position: 'relative', ...containerStyle }}
       className={containerClassName}
+      onContextMenu={handleContextMenu}
     >
       <Canvas
         camera={{
@@ -162,6 +231,14 @@ export default function EveMap3D({
         />
       </Canvas>
       <Compass2DOverlay rotation={compassRotation} />
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={handleCloseContextMenu}
+        />
+      )}
     </div>
   );
 }

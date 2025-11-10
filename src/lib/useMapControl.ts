@@ -62,12 +62,72 @@ export function useMapControl(): MapControl {
       return;
     }
 
-    const { x: px, y: py, z: pz } = initialCameraPositionRef.current;
-    const { x: tx, y: ty, z: tz } = initialCameraTargetRef.current;
+    // 目标位置
+    const targetCenter = {
+      x: initialCameraTargetRef.current.x,
+      y: initialCameraTargetRef.current.y,
+      z: initialCameraTargetRef.current.z
+    };
+    const targetPosition = {
+      x: initialCameraPositionRef.current.x,
+      y: initialCameraPositionRef.current.y,
+      z: initialCameraPositionRef.current.z
+    };
 
-    controlsRef.current.target.set(tx, ty, tz);
-    controlsRef.current.object.position.set(px, py, pz);
-    controlsRef.current.update();
+    // 起始位置
+    const startTarget = {
+      x: controlsRef.current.target.x,
+      y: controlsRef.current.target.y,
+      z: controlsRef.current.target.z
+    };
+    const startPosition = {
+      x: controlsRef.current.object.position.x,
+      y: controlsRef.current.object.position.y,
+      z: controlsRef.current.object.position.z
+    };
+
+    // 取消之前的动画
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    // 动画参数
+    const duration = 1500; // 动画时长（毫秒）
+    const startTime = performance.now();
+
+    // 动画函数
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = easeInOutCubic(progress);
+
+      // 插值计算当前位置
+      const currentTarget = {
+        x: startTarget.x + (targetCenter.x - startTarget.x) * eased,
+        y: startTarget.y + (targetCenter.y - startTarget.y) * eased,
+        z: startTarget.z + (targetCenter.z - startTarget.z) * eased
+      };
+      const currentPosition = {
+        x: startPosition.x + (targetPosition.x - startPosition.x) * eased,
+        y: startPosition.y + (targetPosition.y - startPosition.y) * eased,
+        z: startPosition.z + (targetPosition.z - startPosition.z) * eased
+      };
+
+      // 更新相机位置和目标
+      controlsRef.current!.target.set(currentTarget.x, currentTarget.y, currentTarget.z);
+      controlsRef.current!.object.position.set(currentPosition.x, currentPosition.y, currentPosition.z);
+      controlsRef.current!.update();
+
+      // 继续动画
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
+      }
+    };
+
+    // 开始动画
+    animationFrameRef.current = requestAnimationFrame(animate);
   }, []);
 
   // 聚焦到指定系统（聚焦到星系本身，但距离由所在星域计算）

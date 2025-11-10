@@ -14,5 +14,3 @@ export const DEFAULT_HIGHLIGHT_COLORS: Required<SecurityColorConfig> = {
 
 export const JUMP_DRIVE_LIGHTYEAR_IN_METERS = 9_460_000_000_000_000;
 export const SYSTEM_POINT_SIZE = 8e14;
-
-

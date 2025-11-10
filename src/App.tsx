@@ -212,6 +212,7 @@ function App() {
         scroll: '滚轮: 缩放',
         clickSystem: '点击太阳系: 查看详情',
         selectRegion: '选择星域: 高亮显示',
+        rightClick: '右键点击: 打开菜单',
       },
       en: {
         title: 'EVE 3D Star Map',
@@ -231,6 +232,7 @@ function App() {
         scroll: 'Scroll: Zoom',
         clickSystem: 'Click System: View Details',
         selectRegion: 'Select Region: Highlight',
+        rightClick: 'Right Click: Open Menu',
       },
     }[language]
   }, [language])
@@ -472,6 +474,7 @@ function App() {
           <div>• {t.scroll}</div>
           <div>• {t.clickSystem}</div>
           <div>• {t.selectRegion}</div>
+          <div>• {t.rightClick}</div>
         </div>
       </div>
     </div>
