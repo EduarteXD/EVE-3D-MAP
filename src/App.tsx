@@ -18,6 +18,7 @@ function App() {
   const [jumpDriveOriginInput, setJumpDriveOriginInput] = useState('30004937')
   const [jumpDriveRange, setJumpDriveRange] = useState<number>(5)
   const [jumpDriveError, setJumpDriveError] = useState<string | null>(null)
+  const [isPanelExpanded, setIsPanelExpanded] = useState(true)
   const language: 'zh' | 'en' = 'zh'
 
   // 加载数据
@@ -316,16 +317,37 @@ function App() {
           pointerEvents: 'none',
         }}
       >
-        <h3 style={{ margin: '0 0 10px 0' }}>{t.title}</h3>
-        <div>
-          {t.systemsTotal}: {filteredSystems.length}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', pointerEvents: 'auto' }}>
+          <h3 style={{ margin: 0 }}>{t.title}</h3>
+          <button
+            onClick={() => setIsPanelExpanded(!isPanelExpanded)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #555',
+              borderRadius: '4px',
+              color: '#fff',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              fontSize: '12px',
+              marginLeft: '10px',
+            }}
+            title={isPanelExpanded ? (language === 'zh' ? '收起' : 'Collapse') : (language === 'zh' ? '展开' : 'Expand')}
+          >
+            {isPanelExpanded ? '−' : '+'}
+          </button>
         </div>
-        <div>
-          {t.connections}: {connections}
-        </div>
-        <div>
-          {t.jumpbridges}: {jumpgates.length}
-        </div>
+        
+        {isPanelExpanded && (
+          <>
+            <div>
+              {t.systemsTotal}: {filteredSystems.length}
+            </div>
+            <div>
+              {t.connections}: {connections}
+            </div>
+            <div>
+              {t.jumpbridges}: {jumpgates.length}
+            </div>
 
         <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444', pointerEvents: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -476,6 +498,8 @@ function App() {
           <div>• {t.selectRegion}</div>
           <div>• {t.rightClick}</div>
         </div>
+          </>
+        )}
       </div>
     </div>
   )
