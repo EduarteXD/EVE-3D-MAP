@@ -1,5 +1,7 @@
 # EVE 3D Map
 
+[中文](README.zh.md)
+
 A **React + Three.js** based 3D star map visualization library for **EVE Online**.
 
 <img width="2550" height="1341" alt="image" src="https://github.com/user-attachments/assets/261abd34-02fe-4462-8ff5-f19b260e8d6a" />
