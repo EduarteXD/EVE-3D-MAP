@@ -278,12 +278,14 @@ export function SolarSystemPoints({
 					meshes.push({
 						ref: { current: ref },
 						systems: items.map((item) => item.system),
-					} as unknown as { ref: typeof highsecNormalRef; systems: SolarSystem[] });
+					});
 				}
 			});
 
 			for (const { ref, systems: groupSystems } of meshes) {
 				if (ref.current) {
+					ref.current.computeBoundingSphere();
+					ref.current.computeBoundingBox();
 					const intersects = raycaster.intersectObject(ref.current);
 					if (intersects.length > 0) {
 						const instanceId = intersects[0].instanceId!;
