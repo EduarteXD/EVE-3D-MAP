@@ -3,6 +3,8 @@ import { EveMap3D, useMapControl, isNewEdenSystem, type SolarSystem, type Starga
 import { loadSolarSystems, loadStargates, loadRegions } from './utils/loadEveData'
 import './App.css'
 
+type Language = 'zh' | 'en'
+
 function App() {
   const [systems, setSystems] = useState<SolarSystem[]>([])
   const [stargates, setStargates] = useState<Stargate[]>([])
@@ -15,7 +17,7 @@ function App() {
   const [jumpDriveRange, setJumpDriveRange] = useState<number>(5)
   const [jumpDriveError, setJumpDriveError] = useState<string | null>(null)
   const [isPanelExpanded, setIsPanelExpanded] = useState(true)
-  const language: 'zh' | 'en' = 'zh'
+  const language: Language = 'en'
 
   // Demo 跳桥连接
   const jumpgates = useMemo<Jumpgate[]>(() => {
@@ -173,10 +175,8 @@ function App() {
     if (!system) {
       return null
     }
-    if (language === 'zh') {
-      return system.name.zh || system.name.en || `${system._key}`
-    }
-    return system.name.en || system.name.zh || `${system._key}`
+
+    return system.name?.[language] || system.name?.['en'] || `${system._key}`
   }, [systemMap, jumpDriveOriginId, language])
 
   useEffect(() => {
@@ -184,10 +184,7 @@ function App() {
     if (!system) {
       return
     }
-    const displayName =
-      language === 'zh'
-        ? system.name.zh || system.name.en
-        : system.name.en || system.name.zh
+    const displayName = system.name?.[language] || system.name?.['zh'] || `${system._key}`
     if (displayName && jumpDriveOriginInput === `${jumpDriveOriginId}`) {
       setJumpDriveOriginInput(displayName)
     }
@@ -198,10 +195,7 @@ function App() {
     if (resolved !== undefined) {
       setJumpDriveOriginId(resolved)
       const system = systemMap.get(resolved)
-      const displayName =
-        language === 'zh'
-          ? system?.name.zh || system?.name.en || `${resolved}`
-          : system?.name.en || system?.name.zh || `${resolved}`
+      const displayName = system?.name?.[language] || system?.name?.['zh'] || `${resolved}`
       setJumpDriveOriginInput(displayName ?? `${resolved}`)
       setJumpDriveError(null)
       // 通过 mapControl 聚焦到星系
@@ -209,7 +203,7 @@ function App() {
       return
     }
 
-    setJumpDriveError(language === 'zh' ? '未找到匹配的星系，请输入有效的ID或名称。' : 'System not found. Please enter a valid ID or name.')
+    setJumpDriveError('System not found. Please enter a valid ID or name.')
   }, [resolveSystemIdentifier, jumpDriveOriginInput, systemMap, language, mapControl])
 
   // 翻译文本
@@ -265,9 +259,9 @@ function App() {
         return filteredSystems.some(system => system.regionID === region._key)
       })
       .sort((a, b) => {
-        const nameA = language === 'zh' ? a.name.zh || a.name.en || '' : a.name.en || a.name.zh || ''
-        const nameB = language === 'zh' ? b.name.zh || b.name.en || '' : b.name.en || b.name.zh || ''
-        return nameA.localeCompare(nameB, language === 'zh' ? 'zh-CN' : 'en')
+        const nameA = a.name?.[language] || a.name?.['en'] || ''
+        const nameB = b.name?.[language] || b.name?.['en'] || ''
+        return nameA.localeCompare(nameB)
       })
   }, [regions, filteredSystems, language])
 
@@ -279,7 +273,7 @@ function App() {
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-black text-white">
-        <div>{language === 'zh' ? '加载星图数据中...' : 'Loading star map data...'}</div>
+        <div>Loading star map data...</div>
       </div>
     )
   }
@@ -288,7 +282,7 @@ function App() {
     return (
       <div className="w-full h-full flex items-center justify-center bg-black text-red-500">
         <div>
-          {language === 'zh' ? '错误' : 'Error'}: {error}
+          Error: {error}
         </div>
       </div>
     )
@@ -297,12 +291,12 @@ function App() {
   return (
     <div className="w-full h-full relative">
       {/* 静态数据直接传入 EveMap3D 组件 */}
-      <EveMap3D 
+      <EveMap3D
         systems={systems}
         stargates={stargates}
         jumpgates={jumpgates}
         regions={regions}
-        mapControl={mapControl} 
+        mapControl={mapControl}
       />
 
       {/* 控制面板 */}
@@ -335,12 +329,12 @@ function App() {
               fontSize: '12px',
               marginLeft: '10px',
             }}
-            title={isPanelExpanded ? (language === 'zh' ? '收起' : 'Collapse') : (language === 'zh' ? '展开' : 'Expand')}
+            title={isPanelExpanded ? 'Collapse' : 'Expand'}
           >
             {isPanelExpanded ? '−' : '+'}
           </button>
         </div>
-        
+
         {isPanelExpanded && (
           <>
             <div>
@@ -353,153 +347,153 @@ function App() {
               {t.jumpbridges}: {jumpgates.length}
             </div>
 
-        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444', pointerEvents: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={jumpDriveEnabled}
-                onChange={e => setJumpDriveEnabled(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <span>{language === 'zh' ? '跳跃引擎泡泡' : 'Jump Drive Bubble'}</span>
-            </label>
-          </div>
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#ccc' }}>
-            <div>{language === 'zh' ? '当前起始星系' : 'Current Origin'}: {jumpDriveOriginName ? `${jumpDriveOriginName} (${jumpDriveOriginId})` : jumpDriveOriginId}</div>
-          </div>
-          <div style={{ marginTop: '6px' }}>
-            <input
-              type="text"
-              value={jumpDriveOriginInput}
-              onChange={e => setJumpDriveOriginInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleApplyJumpDriveOrigin()
-                }
-              }}
-              placeholder={language === 'zh' ? '输入星系ID或名称' : 'Enter system ID or name'}
-              style={{
-                width: '100%',
-                padding: '6px',
-                borderRadius: '4px',
-                border: '1px solid #555',
-                background: '#222',
-                color: '#fff',
-                fontSize: '12px',
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleApplyJumpDriveOrigin}
-              style={{
-                marginTop: '6px',
-                width: '100%',
-                padding: '6px',
-                borderRadius: '4px',
-                border: '1px solid #0ff',
-                background: '#034a4a',
-                color: '#0ff',
-                fontSize: '12px',
-                cursor: 'pointer',
-              }}
-            >
-              {language === 'zh' ? '应用起始星系' : 'Apply Origin'}
-            </button>
-          </div>
-          <div style={{ marginTop: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px' }}>{language === 'zh' ? '跳跃距离（光年）' : 'Jump Range (LY)'}</label>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={jumpDriveRange}
-              onChange={e => {
-                const value = Number(e.target.value)
-                if (!Number.isNaN(value)) {
-                  setJumpDriveRange(value)
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '6px',
-                borderRadius: '4px',
-                border: '1px solid #555',
-                background: '#222',
-                color: '#fff',
-                fontSize: '12px',
-              }}
-            />
-          </div>
-          {jumpDriveError && (
-            <div style={{ marginTop: '6px', color: '#ff6666', fontSize: '12px' }}>
-              {jumpDriveError}
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444', pointerEvents: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={jumpDriveEnabled}
+                    onChange={e => setJumpDriveEnabled(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span>Jump Drive Bubble</span>
+                </label>
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#ccc' }}>
+                <div>Current Origin: {jumpDriveOriginName ? `${jumpDriveOriginName} (${jumpDriveOriginId})` : jumpDriveOriginId}</div>
+              </div>
+              <div style={{ marginTop: '6px' }}>
+                <input
+                  type="text"
+                  value={jumpDriveOriginInput}
+                  onChange={e => setJumpDriveOriginInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleApplyJumpDriveOrigin()
+                    }
+                  }}
+                  placeholder="Enter system ID or name"
+                  style={{
+                    width: '100%',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    border: '1px solid #555',
+                    background: '#222',
+                    color: '#fff',
+                    fontSize: '12px',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyJumpDriveOrigin}
+                  style={{
+                    marginTop: '6px',
+                    width: '100%',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    border: '1px solid #0ff',
+                    background: '#034a4a',
+                    color: '#0ff',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Apply Origin
+                </button>
+              </div>
+              <div style={{ marginTop: '8px' }}>
+                <label style={{ display: 'block', marginBottom: '4px' }}>Jump Range (LY)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={jumpDriveRange}
+                  onChange={e => {
+                    const value = Number(e.target.value)
+                    if (!Number.isNaN(value)) {
+                      setJumpDriveRange(value)
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    border: '1px solid #555',
+                    background: '#222',
+                    color: '#fff',
+                    fontSize: '12px',
+                  }}
+                />
+              </div>
+              {jumpDriveError && (
+                <div style={{ marginTop: '6px', color: '#ff6666', fontSize: '12px' }}>
+                  {jumpDriveError}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444' }}>
-          <div>
-            <strong>{t.highlightRegion}:</strong>
-          </div>
-          <select
-            value={highlightedRegionId || ''}
-            onChange={e => {
-              const value = e.target.value ? Number(e.target.value) : null
-              // 通过 mapControl 高亮星域（会自动移动摄像机）
-              mapControl.highlightRegion(value)
-            }}
-            style={{
-              width: '100%',
-              marginTop: '5px',
-              padding: '5px',
-              background: '#222',
-              color: '#fff',
-              border: '1px solid #555',
-              borderRadius: '4px',
-              fontSize: '12px',
-              pointerEvents: 'auto',
-            }}
-          >
-            <option value="">{t.none}</option>
-            {availableRegions.map(region => (
-              <option key={region._key} value={region._key}>
-                {language === 'zh' ? region.name.zh || region.name.en : region.name.en || region.name.zh || `Region ${region._key}`}
-              </option>
-            ))}
-          </select>
-        </div>
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444' }}>
+              <div>
+                <strong>{t.highlightRegion}:</strong>
+              </div>
+              <select
+                value={highlightedRegionId || ''}
+                onChange={e => {
+                  const value = e.target.value ? Number(e.target.value) : null
+                  // 通过 mapControl 高亮星域（会自动移动摄像机）
+                  mapControl.highlightRegion(value)
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '5px',
+                  padding: '5px',
+                  background: '#222',
+                  color: '#fff',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  pointerEvents: 'auto',
+                }}
+              >
+                <option value="">{t.none}</option>
+                {availableRegions.map(region => (
+                  <option key={region._key} value={region._key}>
+                    {region.name?.[language] || region.name?.['en'] || `Region ${region._key}`}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {selectedSystem && (
-          <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444' }}>
-            <div>
-              <strong>{t.selectedSystem}:</strong>
-            </div>
-            <div>
-              {t.name}: {language === 'zh' ? selectedSystem.name.zh || selectedSystem.name.en : selectedSystem.name.en || selectedSystem.name.zh}
-            </div>
-            <div>
-              {t.id}: {selectedSystem._key}
-            </div>
-            <div>
-              {t.security}: {selectedSystem.securityStatus.toFixed(2)}
-            </div>
-            <div>
-              {t.coordinates}: ({selectedSystem.position.x.toExponential(2)}, {selectedSystem.position.y.toExponential(2)}, {selectedSystem.position.z.toExponential(2)})
-            </div>
-          </div>
-        )}
+            {selectedSystem && (
+              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #444' }}>
+                <div>
+                  <strong>{t.selectedSystem}:</strong>
+                </div>
+                <div>
+                  {t.name}: {selectedSystem.name?.[language] || selectedSystem.name?.['en'] || `${selectedSystem._key}`}
+                </div>
+                <div>
+                  {t.id}: {selectedSystem._key}
+                </div>
+                <div>
+                  {t.security}: {selectedSystem.securityStatus.toFixed(2)}
+                </div>
+                <div>
+                  {t.coordinates}: ({selectedSystem.position.x.toExponential(2)}, {selectedSystem.position.y.toExponential(2)}, {selectedSystem.position.z.toExponential(2)})
+                </div>
+              </div>
+            )}
 
-        <div style={{ marginTop: '10px', fontSize: '12px', color: '#aaa' }}>
-          <div>{t.instructions}:</div>
-          <div>• {t.dragLeft}</div>
-          <div>• {t.dragRight}</div>
-          <div>• {t.scroll}</div>
-          <div>• {t.clickSystem}</div>
-          <div>• {t.selectRegion}</div>
-          <div>• {t.rightClick}</div>
-        </div>
+            <div style={{ marginTop: '10px', fontSize: '12px', color: '#aaa' }}>
+              <div>{t.instructions}:</div>
+              <div>• {t.dragLeft}</div>
+              <div>• {t.dragRight}</div>
+              <div>• {t.scroll}</div>
+              <div>• {t.clickSystem}</div>
+              <div>• {t.selectRegion}</div>
+              <div>• {t.rightClick}</div>
+            </div>
           </>
         )}
       </div>
