@@ -2,8 +2,7 @@
 
 一个基于 React 和 Three.js 的 EVE Online 3D 星图可视化组件库。
 
-<img width="2551" height="1340" alt="image" src="https://github.com/user-attachments/assets/7db610ce-c4b1-4070-887a-155852d4f3bc" />
-
+<img width="2554" height="1341" alt="image" src="https://github.com/user-attachments/assets/c51cee68-473c-4ed4-8ad7-783d6b88bafc" />
 
 ## 特性
 
