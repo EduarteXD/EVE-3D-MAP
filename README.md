@@ -440,19 +440,136 @@ const mapControl = useMapControl({
 
 ### Example 5: Programmatic Camera Control
 
-*(All camera operations are performed via `mapControl`)*
+```tsx
+function ControlledExample({ systems, stargates }) {
+  const mapControl = useMapControl();
+  const [systemId, setSystemId] = useState<number | null>(null);
+
+  const handleSelectSystem = () => {
+    if (systemId) {
+      mapControl.selectSystem(systemId);
+    }
+  };
+
+  const handleFocusRegion = (regionId: number) => {
+    mapControl.highlightRegion(regionId);
+  };
+
+  return (
+    <div>
+      <input
+        type="number"
+        value={systemId || ''}
+        onChange={(e) => setSystemId(Number(e.target.value))}
+        placeholder="输入星系ID"
+      />
+      <button onClick={handleSelectSystem}>选择星系</button>
+      <button onClick={() => mapControl.resetCamera()}>重置相机</button>
+      
+      <EveMap3D 
+        systems={systems}
+        stargates={stargates}
+        mapControl={mapControl} 
+      />
+    </div>
+  );
+}
+```
 
 ### Example 6: Dynamic Configuration
 
-Toggling language and filters at runtime.
+```tsx
+function DynamicConfigExample({ systems, stargates }) {
+  const mapControl = useMapControl({
+    language: 'zh',
+  });
+
+  const toggleLanguage = () => {
+    const currentConfig = mapControl.getConfig();
+    mapControl.setConfig({
+      language: currentConfig.language === 'zh' ? 'en' : 'zh',
+    });
+  };
+
+  const showOnlyHighSec = () => {
+    mapControl.setConfig({
+      systemFilter: (system) => system.securityStatus >= 0.45,
+    });
+  };
+
+  return (
+    <div>
+      <button onClick={toggleLanguage}>切换语言</button>
+      <button onClick={showOnlyHighSec}>只显示高安</button>
+      <button onClick={() => mapControl.setConfig({ systemFilter: undefined })}>
+        显示全部
+      </button>
+      
+      <EveMap3D 
+        systems={systems}
+        stargates={stargates}
+        mapControl={mapControl} 
+      />
+    </div>
+  );
+}
+```
 
 ### Example 7: Jump Drive Configuration
 
-Demonstrates jump range bubble and reachable systems visualization.
+```tsx
+const mapControl = useMapControl({
+  jumpDriveConfig: {
+    originSystemId: 30000142, // Jita
+    rangeLightYears: 5.0,
+    showBubble: true,
+    bubbleColor: '#00ffff',
+    bubbleOpacity: 0.15,
+    showReachableSystems: true,
+    reachableSystemColor: '#00ffff',
+    reachableSystemSizeMultiplier: 1.8,
+  },
+});
+
+const updateJumpDrive = (newSystemId: number) => {
+  mapControl.setConfig({
+    jumpDriveConfig: {
+      originSystemId: newSystemId,
+      rangeLightYears: 6.0,
+    },
+  });
+};
+
+<EveMap3D 
+  systems={systems}
+  stargates={stargates}
+  mapControl={mapControl} 
+/>
+```
 
 ### Example 8: Jump Bridge Configuration
 
-Custom styling for jump bridge connections.
+```tsx
+const jumpgates = [
+  { fromSystemId: 30000142, toSystemId: 30002187 },
+  { fromSystemId: 30002187, toSystemId: 30004759 },
+];
+
+const mapControl = useMapControl({
+  style: {
+    jumpgateLineColor: '#ff00ff',
+    jumpgateLineOpacity: 0.8,
+    highlightedJumpgateLineColor: '#ffff00',
+  },
+});
+
+<EveMap3D 
+  systems={systems}
+  stargates={stargates}
+  jumpgates={jumpgates}
+  mapControl={mapControl} 
+/>
+```
 
 ---
 
