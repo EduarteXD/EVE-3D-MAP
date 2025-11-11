@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type {
@@ -206,7 +206,7 @@ export function Scene({
 	useEffect(() => {
 		if (filteredSystems.length === 0 || !jumpgates || jumpgates.length === 0) {
 			setJumpgateConnections([]);
-		 return;
+			return;
 		}
 		const newConnections: Array<{ from: SolarSystem; to: SolarSystem }> = [];
 		const systemSet = new Set(filteredSystems.map((s) => s._key));
@@ -285,7 +285,7 @@ export function Scene({
 		const animate = () => {
 			const elapsed = Date.now() - startTime;
 			const progress = Math.min(elapsed / duration, 1);
-		 const easedProgress = easeInOutCubic(progress);
+			const easedProgress = easeInOutCubic(progress);
 			const currentTarget = startTarget.clone().lerp(targetCenter, easedProgress);
 			const currentPosition = startPosition.clone().lerp(targetPosition, easedProgress);
 			controlsRef.current.target.copy(currentTarget);
@@ -355,6 +355,44 @@ export function Scene({
 		};
 	}, [focus, filteredSystems, camera, onFocusComplete]);
 
+	const [visibleRegionIds, setVisibleRegionIds] = useState<Set<number>>(new Set());
+
+	useFrame(() => {
+		if (!regions || regions.length === 0) return;
+		const projected: { id: number; screenPos: THREE.Vector3; dist: number }[] = [];
+
+		regions.forEach((region) => {
+			const regionSystems = filteredSystems.filter((s) => s.regionID === region._key);
+			if (regionSystems.length === 0) return;
+			const center = new THREE.Vector3();
+			regionSystems.forEach((s) =>
+				center.add(new THREE.Vector3(-s.position.x, -s.position.y, s.position.z))
+			);
+			center.divideScalar(regionSystems.length);
+
+			const projectedPos = center.clone().project(camera);
+			projected.push({
+				id: region._key,
+				screenPos: projectedPos,
+				dist: camera.position.distanceTo(center),
+			});
+		});
+
+		const visible = new Set<number>();
+		const threshold = 0.04;
+		projected.forEach((a) => {
+			const overlapped = projected.some(
+				(b) =>
+					a !== b &&
+					Math.abs(a.screenPos.x - b.screenPos.x) < threshold &&
+					Math.abs(a.screenPos.y - b.screenPos.y) < threshold &&
+					b.dist < a.dist
+			);
+			if (!overlapped) visible.add(a.id);
+		});
+		setVisibleRegionIds(visible);
+	});
+
 	return (
 		<>
 			<ambientLight intensity={0.5} />
@@ -403,7 +441,7 @@ export function Scene({
 				filteredSystems
 					.filter((system) => highlightedSystemIds.has(system._key))
 					.map((system) => <SolarSystemLabel key={system._key} system={system} language={language} style={style} isHighlightedRegion={false} />)}
-			{regions &&
+			{/* {regions &&
 				regions.length > 0 &&
 				regions
 					.filter((region) => {
@@ -411,6 +449,22 @@ export function Scene({
 					})
 					.map((region) => (
 						<RegionLabel key={region._key} region={region} systems={filteredSystems} language={language} style={style} isHighlighted={highlightedRegionId === region._key} onClick={onRegionClick} />
+					))} */}
+			{regions &&
+				regions.length > 0 &&
+				regions
+					.filter((region) => filteredSystems.some((s) => s.regionID === region._key))
+					.map((region) => (
+						<RegionLabel
+							key={region._key}
+							region={region}
+							systems={filteredSystems}
+							language={language}
+							style={style}
+							isHighlighted={highlightedRegionId === region._key}
+							visible={visibleRegionIds.has(region._key)}
+							onClick={onRegionClick}
+						/>
 					))}
 			<OrbitControls ref={controlsRef} enablePan={true} enableZoom={true} enableRotate={true} minDistance={1e15} maxDistance={1e18} autoRotate={false} zoomSpeed={-1} />
 			{onCompassRotationChange && <Compass2DInternal onRotationChange={onCompassRotationChange} />}

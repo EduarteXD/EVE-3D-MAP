@@ -8,6 +8,7 @@ export function RegionLabel({
 	region,
 	systems,
 	language,
+	visible,
 	style,
 	isHighlighted = false,
 	onClick,
@@ -15,6 +16,7 @@ export function RegionLabel({
 	region: Region;
 	systems: SolarSystem[];
 	language: Language;
+	visible: boolean;
 	style?: { labelFontSize?: number; labelColor?: string };
 	isHighlighted?: boolean;
 	onClick?: (region: Region) => void;
@@ -87,6 +89,7 @@ export function RegionLabel({
 	return (
 		<Text
 			ref={textRef}
+			fillOpacity={visible ? 1 : 0.4}
 			position={[regionCenter.x, regionCenter.y, regionCenter.z]}
 			fontSize={baseFontSize}
 			color={labelColor}
