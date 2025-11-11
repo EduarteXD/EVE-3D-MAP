@@ -29,12 +29,6 @@ npm install eve-map-3d
 - `@react-three/drei` >= 10.0.0
 - `three` >= 0.180.0
 
-确保在项目中安装这些依赖：
-
-```bash
-npm install react react-dom @react-three/fiber @react-three/drei three
-```
-
 ## 快速开始
 
 ### 1. 准备数据
