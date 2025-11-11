@@ -18,6 +18,86 @@ export interface ProjectedLabel {
 }
 
 /**
+ * 空间哈希网格，用于加速标签重叠检测
+ * 将屏幕空间划分为网格，每个网格存储该区域的标签
+ */
+class SpatialHashGrid {
+	private cellSize: number;
+	private grid: Map<string, Set<number>>;
+
+	constructor(cellSize: number = 0.1) {
+		this.cellSize = cellSize;
+		this.grid = new Map();
+	}
+
+	/**
+	 * 获取标签占据的所有网格单元
+	 */
+	private getOccupiedCells(label: ProjectedLabel): string[] {
+		const cells: string[] = [];
+		const halfWidth = label.screenWidth / 2;
+		const halfHeight = label.screenHeight / 2;
+		
+		const minX = label.screenPos.x - halfWidth;
+		const maxX = label.screenPos.x + halfWidth;
+		const minY = label.screenPos.y - halfHeight;
+		const maxY = label.screenPos.y + halfHeight;
+
+		const minCellX = Math.floor(minX / this.cellSize);
+		const maxCellX = Math.floor(maxX / this.cellSize);
+		const minCellY = Math.floor(minY / this.cellSize);
+		const maxCellY = Math.floor(maxY / this.cellSize);
+
+		for (let x = minCellX; x <= maxCellX; x++) {
+			for (let y = minCellY; y <= maxCellY; y++) {
+				cells.push(`${x},${y}`);
+			}
+		}
+
+		return cells;
+	}
+
+	/**
+	 * 添加标签到网格
+	 */
+	add(label: ProjectedLabel): void {
+		const cells = this.getOccupiedCells(label);
+		for (const cell of cells) {
+			if (!this.grid.has(cell)) {
+				this.grid.set(cell, new Set());
+			}
+			this.grid.get(cell)!.add(label.id);
+		}
+	}
+
+	/**
+	 * 获取可能与指定标签重叠的标签ID
+	 */
+	getPotentialCollisions(label: ProjectedLabel): Set<number> {
+		const potentialCollisions = new Set<number>();
+		const cells = this.getOccupiedCells(label);
+		
+		for (const cell of cells) {
+			const labelsInCell = this.grid.get(cell);
+			if (labelsInCell) {
+				for (const id of labelsInCell) {
+					potentialCollisions.add(id);
+				}
+			}
+		}
+
+		return potentialCollisions;
+	}
+
+	/**
+	 * 清空网格
+	 */
+	clear(): void {
+		this.grid.clear();
+	}
+}
+
+/**
  * 检测两个标签是否在屏幕空间中重叠
  * 使用矩形边界框（AABB）进行碰撞检测
  * 
@@ -40,6 +120,7 @@ function checkLabelOverlap(a: ProjectedLabel, b: ProjectedLabel): boolean {
 
 /**
  * 从一组投影标签中检测可见的标签（无重叠）
+ * 使用空间哈希网格优化，将时间复杂度从 O(n²) 降低到接近 O(n)
  * 
  * @param labels 要检测的标签数组
  * @param sortFn 排序函数，用于确定标签的优先级（返回负数表示 a 优先于 b）
@@ -65,17 +146,25 @@ export function detectLabelVisibility<T extends ProjectedLabel>(
 ): Set<number> {
 	if (labels.length === 0) return new Set();
 
-	const labelMap = new Map(labels.map(label => [label.id, label]));
+	// 按优先级排序标签
+	const sortedLabels = [...labels];
+	sortedLabels.sort(sortFn);
+
+	// 创建标签映射和空间哈希网格
+	const labelMap = new Map(sortedLabels.map(label => [label.id, label]));
+	const spatialGrid = new SpatialHashGrid(0.15); // 网格大小调优，0.15 在屏幕空间中是一个合理的值
 	const visible = new Set<number>();
 
-	labels.sort(sortFn);
-
-	for (const label of labels) {
+	for (const label of sortedLabels) {
+		// 使用空间哈希获取潜在的碰撞标签（仅检查附近的标签）
+		const potentialCollisions = spatialGrid.getPotentialCollisions(label);
 		let hasOverlap = false;
 		
-		for (const visibleId of visible) {
-			const visibleLabel = labelMap.get(visibleId)!;
+		// 只检查空间上接近的可见标签
+		for (const visibleId of potentialCollisions) {
+			if (!visible.has(visibleId)) continue;
 			
+			const visibleLabel = labelMap.get(visibleId)!;
 			if (checkLabelOverlap(label, visibleLabel)) {
 				hasOverlap = true;
 				break;
@@ -84,6 +173,7 @@ export function detectLabelVisibility<T extends ProjectedLabel>(
 		
 		if (!hasOverlap) {
 			visible.add(label.id);
+			spatialGrid.add(label); // 将可见标签添加到空间哈希网格
 		}
 	}
 

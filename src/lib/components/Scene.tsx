@@ -250,7 +250,15 @@ export function Scene({
 	const [visibleSystemIds, setVisibleSystemIds] = useState<Set<number>>(new Set());
 	
 	const frameCounterRef = useRef(0);
-	const STABILITY_THRESHOLD = 15;
+	const lastCameraPositionRef = useRef(new THREE.Vector3());
+	const lastCameraTargetRef = useRef(new THREE.Vector3());
+	const cameraVelocityRef = useRef(0);
+	
+	// 动态稳定性阈值：基于相机移动速度调整
+	// 相机静止：更新频率降低（阈值增大）
+	// 相机移动：更新频率提高（阈值减小）
+	const MIN_STABILITY_THRESHOLD = 5;
+	const MAX_STABILITY_THRESHOLD = 30;
 
 	const systemsByRegion = useMemo(() => {
 		const map = new Map<number, SolarSystem[]>();
@@ -262,16 +270,53 @@ export function Scene({
 		return map;
 	}, [filteredSystems]);
 
+	// 缓存需要显示标签的星系列表，避免每次渲染时重复过滤
+	const systemsToLabel = useMemo(() => {
+		if (highlightedRegionId !== null) {
+			return systemsByRegion.get(highlightedRegionId) || [];
+		} else if (highlightedSystemIds.size > 0) {
+			return filteredSystems.filter((system) => highlightedSystemIds.has(system._key));
+		}
+		return [];
+	}, [highlightedRegionId, highlightedSystemIds, filteredSystems, systemsByRegion]);
+
 	useFrame(() => {
 		frameCounterRef.current++;
-		const shouldUpdate = frameCounterRef.current % STABILITY_THRESHOLD === 0;
 		
-		if (!shouldUpdate) {
-			return;
+		// 计算相机移动速度
+		const currentPosition = camera.position.clone();
+		const currentTarget = controlsRef.current?.target?.clone() || new THREE.Vector3();
+		
+		// 初始化上一帧状态（第一帧）
+		if (frameCounterRef.current === 1) {
+			lastCameraPositionRef.current.copy(currentPosition);
+			lastCameraTargetRef.current.copy(currentTarget);
 		}
 		
-		updateRegionLabels();
-		updateSystemLabels();
+		const positionDelta = currentPosition.distanceTo(lastCameraPositionRef.current);
+		const targetDelta = currentTarget.distanceTo(lastCameraTargetRef.current);
+		const totalMovement = positionDelta + targetDelta;
+		
+		// 平滑相机速度（移动平均）
+		cameraVelocityRef.current = cameraVelocityRef.current * 0.8 + totalMovement * 0.2;
+		
+		// 根据相机速度动态调整稳定性阈值
+		// 速度快时阈值小（更新频繁），速度慢时阈值大（更新稀疏）
+		const velocityNormalized = Math.min(cameraVelocityRef.current / 1e15, 1.0);
+		const dynamicThreshold = Math.round(
+			MAX_STABILITY_THRESHOLD - velocityNormalized * (MAX_STABILITY_THRESHOLD - MIN_STABILITY_THRESHOLD)
+		);
+		
+		const shouldUpdate = frameCounterRef.current % dynamicThreshold === 0;
+		
+		if (shouldUpdate) {
+			updateRegionLabels();
+			updateSystemLabels();
+		}
+		
+		// 更新上一帧的相机状态
+		lastCameraPositionRef.current.copy(currentPosition);
+		lastCameraTargetRef.current.copy(currentTarget);
 	});
 
 	// 区域标签更新逻辑
@@ -339,14 +384,7 @@ export function Scene({
 
 	// 星系标签更新逻辑
 	function updateSystemLabels() {
-		// 使用预计算的映射替代 filter
-		const systemsToLabel = highlightedRegionId !== null
-			? (systemsByRegion.get(highlightedRegionId) || [])
-			: highlightedSystemIds.size > 0
-			? filteredSystems.filter((system) => highlightedSystemIds.has(system._key))
-			: [];
-		
-		// 没有需要标记的星系，清空可见集合
+		// 使用缓存的星系列表
 		if (systemsToLabel.length === 0) {
 			if (visibleSystemIds.size > 0) {
 				setVisibleSystemIds(new Set());
@@ -457,33 +495,17 @@ export function Scene({
 					if (!originSystem) return null;
 					return <HomeIcon system={originSystem} onSystemClick={onSystemClick} />;
 				})()}
-			{highlightedRegionId !== null &&
-				filteredSystems
-					.filter((system) => system.regionID === highlightedRegionId)
-					.map((system) => (
-						<SolarSystemLabel 
-							key={system._key} 
-							system={system} 
-							language={language} 
-							style={style} 
-							isHighlightedRegion={!highlightedSystemIds.has(system._key)}
-							visible={visibleSystemIds.has(system._key)}
-						/>
-					))}
-			{highlightedRegionId === null &&
-				highlightedSystemIds.size > 0 &&
-				filteredSystems
-					.filter((system) => highlightedSystemIds.has(system._key))
-					.map((system) => (
-						<SolarSystemLabel 
-							key={system._key} 
-							system={system} 
-							language={language} 
-							style={style} 
-							isHighlightedRegion={false}
-							visible={visibleSystemIds.has(system._key)}
-						/>
-					))}
+			{systemsToLabel.length > 0 &&
+				systemsToLabel.map((system) => (
+					<SolarSystemLabel 
+						key={system._key} 
+						system={system} 
+						language={language} 
+						style={style} 
+						isHighlightedRegion={highlightedRegionId !== null && !highlightedSystemIds.has(system._key)}
+						visible={visibleSystemIds.has(system._key)}
+					/>
+				))}
 			{regions &&
 				regions.length > 0 &&
 				regions

@@ -74,6 +74,7 @@ export default function EveMap3D({
         onClick: () => {
           mapControl.resetCamera();
           mapControl.highlightRegion(null);
+          mapControl.selectSystem(null);
         },
       },
     ];

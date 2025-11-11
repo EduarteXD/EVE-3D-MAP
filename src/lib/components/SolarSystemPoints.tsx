@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { JumpDriveConfig, MapControl, SecurityColorConfig, SolarSystem, SystemRenderConfig } from '../types';
 import { DEFAULT_HIGHLIGHT_COLORS, DEFAULT_SECURITY_COLORS, SYSTEM_POINT_SIZE } from './constants';
 import { clampSystemPointBaseScale } from './utils/clampSystemPointBaseScale';
-import { JumpDriveReachableRing } from './JumpDriveReachableRing';
+import { JumpDriveReachableRings } from './JumpDriveReachableRings';
 
 export function SolarSystemPoints({
 	systems,
@@ -194,6 +194,7 @@ export function SolarSystemPoints({
 		return result;
 	}, [customSystemGroups, mergedSecurityColors]);
 
+	// 缓存包围盒计算，避免每次点击都重新计算
 	useEffect(() => {
 		const matrix = new THREE.Matrix4();
 
@@ -203,6 +204,9 @@ export function SolarSystemPoints({
 				highsecNormalRef.current!.setMatrixAt(index, matrix);
 			});
 			highsecNormalRef.current.instanceMatrix.needsUpdate = true;
+			// 计算一次包围盒并缓存
+			highsecNormalRef.current.computeBoundingSphere();
+			highsecNormalRef.current.computeBoundingBox();
 		}
 
 		if (highsecHighlightRef.current) {
@@ -211,6 +215,8 @@ export function SolarSystemPoints({
 				highsecHighlightRef.current!.setMatrixAt(index, matrix);
 			});
 			highsecHighlightRef.current.instanceMatrix.needsUpdate = true;
+			highsecHighlightRef.current.computeBoundingSphere();
+			highsecHighlightRef.current.computeBoundingBox();
 		}
 
 		if (lowsecNormalRef.current) {
@@ -219,6 +225,8 @@ export function SolarSystemPoints({
 				lowsecNormalRef.current!.setMatrixAt(index, matrix);
 			});
 			lowsecNormalRef.current.instanceMatrix.needsUpdate = true;
+			lowsecNormalRef.current.computeBoundingSphere();
+			lowsecNormalRef.current.computeBoundingBox();
 		}
 
 		if (lowsecHighlightRef.current) {
@@ -227,6 +235,8 @@ export function SolarSystemPoints({
 				lowsecHighlightRef.current!.setMatrixAt(index, matrix);
 			});
 			lowsecHighlightRef.current.instanceMatrix.needsUpdate = true;
+			lowsecHighlightRef.current.computeBoundingSphere();
+			lowsecHighlightRef.current.computeBoundingBox();
 		}
 
 		if (nullsecNormalRef.current) {
@@ -235,6 +245,8 @@ export function SolarSystemPoints({
 				nullsecNormalRef.current!.setMatrixAt(index, matrix);
 			});
 			nullsecNormalRef.current.instanceMatrix.needsUpdate = true;
+			nullsecNormalRef.current.computeBoundingSphere();
+			nullsecNormalRef.current.computeBoundingBox();
 		}
 
 		if (nullsecHighlightRef.current) {
@@ -243,6 +255,8 @@ export function SolarSystemPoints({
 				nullsecHighlightRef.current!.setMatrixAt(index, matrix);
 			});
 			nullsecHighlightRef.current.instanceMatrix.needsUpdate = true;
+			nullsecHighlightRef.current.computeBoundingSphere();
+			nullsecHighlightRef.current.computeBoundingBox();
 		}
 
 		customSystemGroups.forEach((items, key) => {
@@ -253,6 +267,8 @@ export function SolarSystemPoints({
 					ref.setMatrixAt(index, matrix);
 				});
 				ref.instanceMatrix.needsUpdate = true;
+				ref.computeBoundingSphere();
+				ref.computeBoundingBox();
 			}
 		});
 	}, [systemGroups, customSystemGroups]);
@@ -286,8 +302,7 @@ export function SolarSystemPoints({
 
 			for (const { ref, systems: groupSystems } of meshes) {
 				if (ref.current) {
-					ref.current.computeBoundingSphere();
-					ref.current.computeBoundingBox();
+					// 包围盒已在矩阵更新时计算并缓存，无需重复计算
 					const intersects = raycaster.intersectObject(ref.current);
 					if (intersects.length > 0) {
 						const instanceId = intersects[0].instanceId!;
@@ -343,19 +358,14 @@ export function SolarSystemPoints({
 					/>
 				);
 			})}
-			{jumpDriveHighlight &&
-				jumpDriveHighlight.systems.length > 0 &&
-				jumpDriveHighlight.systems
-					.filter((system) => system._key !== jumpDriveConfig?.originSystemId)
-					.map((system) => (
-						<JumpDriveReachableRing
-							key={`jumpdrive-ring-${system._key}`}
-							system={system}
-							color={jumpDriveHighlight.color}
-							opacity={jumpDriveHighlight.opacity}
-							scale={jumpDriveHighlight.scale}
-						/>
-					))}
+		{jumpDriveHighlight && jumpDriveHighlight.systems.length > 0 && (
+			<JumpDriveReachableRings
+				systems={jumpDriveHighlight.systems.filter((system) => system._key !== jumpDriveConfig?.originSystemId)}
+				color={jumpDriveHighlight.color}
+				opacity={jumpDriveHighlight.opacity}
+				scale={jumpDriveHighlight.scale}
+			/>
+		)}
 		</>
 	);
 }

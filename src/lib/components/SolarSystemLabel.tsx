@@ -36,17 +36,36 @@ export function SolarSystemLabel({
 	const groupRef = useRef<THREE.Group>(null);
 	const nameTextRef = useRef<THREE.Mesh>(null);
 	const secTextRef = useRef<THREE.Mesh>(null);
+	const frameCounterRef = useRef(0);
 	const { camera } = useThree();
 	const pointSize = 1e15;
 	const baseFontSize = style?.labelFontSize || 1e15;
 	const grayFontSize = baseFontSize * 0.7;
 	const labelOffset = pointSize * 3 * (isHighlightedRegion ? 0.6 : 1.1);
 	const maxGrayLabelDistance = 4e17;
+	
+	// 帧跳过配置：每 N 帧更新一次（降低更新频率以提升性能）
+	const FRAME_SKIP = 2;
+
+	const systemPositionRef = useRef(new THREE.Vector3());
+	const toCameraRef = useRef(new THREE.Vector3());
+	const cameraDirectionRef = useRef(new THREE.Vector3());
+	const upRef = useRef(new THREE.Vector3(0, 1, 0));
+	const rightDirectionRef = useRef(new THREE.Vector3());
+	const labelPositionRef = useRef(new THREE.Vector3());
+	const lastOpacityRef = useRef<number>(visible ? 1.0 : 0.3);
 
 	useFrame(() => {
+		// 帧跳过：减少更新频率以提升性能
+		frameCounterRef.current++;
+		if (frameCounterRef.current % FRAME_SKIP !== 0) {
+			return;
+		}
+		
 		if (groupRef.current && nameTextRef.current && secTextRef.current) {
-			const systemPosition = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
-			const distanceToCamera = camera.position.distanceTo(systemPosition);
+			systemPositionRef.current.set(-system.position.x, -system.position.y, system.position.z);
+			const distanceToCamera = camera.position.distanceTo(systemPositionRef.current);
+			
 			if (isHighlightedRegion && distanceToCamera > maxGrayLabelDistance) {
 				groupRef.current.visible = false;
 				return;
@@ -55,32 +74,33 @@ export function SolarSystemLabel({
 			// 根据遮挡检测结果控制可见性
 			groupRef.current.visible = true;
 			
-			// 设置透明度：被遮挡的标签降低透明度
 			const targetOpacity = visible ? 1.0 : 0.3;
-			const setOpacity = (mat: THREE.Material) => {
-				if (mat.transparent !== true) {
-					mat.transparent = true;
+			if (lastOpacityRef.current !== targetOpacity) {
+				lastOpacityRef.current = targetOpacity;
+				const setOpacity = (mat: THREE.Material) => {
+					if (mat.transparent !== true) {
+						mat.transparent = true;
+					}
+					mat.opacity = targetOpacity;
+				};
+				if (Array.isArray(nameTextRef.current.material)) {
+					nameTextRef.current.material.forEach(setOpacity);
+				} else if (nameTextRef.current.material) {
+					setOpacity(nameTextRef.current.material);
 				}
-				mat.opacity = targetOpacity;
-			};
-			if (Array.isArray(nameTextRef.current.material)) {
-				nameTextRef.current.material.forEach(setOpacity);
-			} else if (nameTextRef.current.material) {
-				setOpacity(nameTextRef.current.material);
+				if (Array.isArray(secTextRef.current.material)) {
+					secTextRef.current.material.forEach(setOpacity);
+				} else if (secTextRef.current.material) {
+					setOpacity(secTextRef.current.material);
+				}
 			}
-			if (Array.isArray(secTextRef.current.material)) {
-				secTextRef.current.material.forEach(setOpacity);
-			} else if (secTextRef.current.material) {
-				setOpacity(secTextRef.current.material);
-			}
-			const toCamera = new THREE.Vector3().subVectors(camera.position, systemPosition);
-			const cameraDirection = toCamera.clone().normalize();
-			const up = new THREE.Vector3(0, 1, 0);
-			const rightDirection = new THREE.Vector3();
-			rightDirection.crossVectors(up, cameraDirection).normalize();
-			const labelPosition = new THREE.Vector3().copy(systemPosition).add(rightDirection.clone().multiplyScalar(labelOffset));
 			
-			groupRef.current.position.copy(labelPosition);
+			toCameraRef.current.subVectors(camera.position, systemPositionRef.current);
+			cameraDirectionRef.current.copy(toCameraRef.current).normalize();
+			rightDirectionRef.current.crossVectors(upRef.current, cameraDirectionRef.current).normalize();
+			labelPositionRef.current.copy(systemPositionRef.current).add(rightDirectionRef.current.multiplyScalar(labelOffset));
+			
+			groupRef.current.position.copy(labelPositionRef.current);
 			
 			// 使标签完全面向摄像机，平行于屏幕
 			groupRef.current.quaternion.copy(camera.quaternion);

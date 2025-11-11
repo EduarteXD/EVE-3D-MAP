@@ -27,7 +27,7 @@ export function RegionLabel({
 	const opacitySetRef = useRef(false);
 	const { camera } = useThree();
 	const baseFontSize = (style?.labelFontSize || 2e15) * 1.5;
-	const labelOffset = 5e15;
+	const labelOffset = isHighlighted ? 4e15 : 5e15;
 
 	const regionCenter = useMemo(() => {
 		const regionSystems = systems.filter((s) => s.regionID === region._key);
@@ -41,6 +41,14 @@ export function RegionLabel({
 		center.divideScalar(regionSystems.length);
 		return center;
 	}, [region, systems]);
+
+	const toCameraRef = useRef(new THREE.Vector3());
+	const cameraDirectionRef = useRef(new THREE.Vector3());
+	const upRef = useRef(new THREE.Vector3(0, 20, 0));
+	const rightDirectionRef = useRef(new THREE.Vector3());
+	const labelPositionRef = useRef(new THREE.Vector3());
+	const tempVec1Ref = useRef(new THREE.Vector3());
+	const tempVec2Ref = useRef(new THREE.Vector3());
 
 	const setMaterialOpacity = useCallback(() => {
 		if (textRef.current?.material && !opacitySetRef.current) {
@@ -62,13 +70,15 @@ export function RegionLabel({
 			setMaterialOpacity();
 			const distanceToCamera = camera.position.distanceTo(regionCenter);
 			textRef.current.visible = true;
-			const toCamera = new THREE.Vector3().subVectors(camera.position, regionCenter);
-			const cameraDirection = toCamera.clone().normalize();
-			const up = new THREE.Vector3(0, 20, 0);
-			const rightDirection = new THREE.Vector3();
-			rightDirection.crossVectors(up, cameraDirection).normalize();
-			const labelPosition = new THREE.Vector3().copy(regionCenter).add(rightDirection.clone().multiplyScalar(labelOffset)).add(up.clone().multiplyScalar(labelOffset * 0.5));
-			textRef.current.position.copy(labelPosition);
+			
+			toCameraRef.current.subVectors(camera.position, regionCenter);
+			cameraDirectionRef.current.copy(toCameraRef.current).normalize();
+			rightDirectionRef.current.crossVectors(upRef.current, cameraDirectionRef.current).normalize();
+			
+			tempVec1Ref.current.copy(rightDirectionRef.current).multiplyScalar(labelOffset);
+			tempVec2Ref.current.copy(upRef.current).multiplyScalar(labelOffset * 0.5);
+			labelPositionRef.current.copy(regionCenter).add(tempVec1Ref.current).add(tempVec2Ref.current);
+			textRef.current.position.copy(labelPositionRef.current);
 			
 			// 使标签完全面向摄像机，平行于屏幕
 			textRef.current.quaternion.copy(camera.quaternion);
