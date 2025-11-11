@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { JumpDriveConfig, MapControl, SecurityColorConfig, SolarSystem, SystemRenderConfig } from '../types';
 import { DEFAULT_HIGHLIGHT_COLORS, DEFAULT_SECURITY_COLORS, SYSTEM_POINT_SIZE } from './constants';
-import { clampSystemPointBaseScale } from './utils/utils';
+import { clampSystemPointBaseScale } from './utils/clampSystemPointBaseScale';
 import { JumpDriveReachableRing } from './JumpDriveReachableRing';
 
 export function SolarSystemPoints({
