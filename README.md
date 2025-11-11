@@ -29,12 +29,6 @@ This library requires the following peer dependencies:
 * `@react-three/drei` >= 10.0.0
 * `three` >= 0.180.0
 
-Make sure they are installed in your project:
-
-```bash
-npm install react react-dom @react-three/fiber @react-three/drei three
-```
-
 ## Quick Start
 
 ### 1. Prepare Data
