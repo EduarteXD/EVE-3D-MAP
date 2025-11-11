@@ -2,37 +2,21 @@
 
 一个基于 React 和 Three.js 的 EVE Online 3D 星图可视化组件库。
 
-<img width="2554" height="1341" alt="image" src="https://github.com/user-attachments/assets/c51cee68-473c-4ed4-8ad7-783d6b88bafc" />
+![preview](https://github.com/user-attachments/assets/c51cee68-473c-4ed4-8ad7-783d6b88bafc)
 
 ## 特性
 
--  3D 可视化 EVE Online 星图
--  交互式操作（旋转、平移、缩放）
--  星系点击和高亮
--  星域高亮显示
--  自定义颜色和样式
--  多语言支持（中文/英文）
--  高性能渲染（使用 InstancedMesh）
--  统一的 mapControl API，所有配置和操作通过单一接口管理
+- 3D 可视化 EVE Online 星图
+- 交互式操作（旋转、平移、缩放）
+- 星系点击和高亮
+- 星域高亮显示
+- 自定义颜色和样式
+- 多语言支持（中文/英文）
 
 ## 安装
 
-### 使用 npm
-
 ```bash
 npm install eve-map-3d
-```
-
-### 使用 pnpm
-
-```bash
-pnpm add eve-map-3d
-```
-
-### 使用 yarn
-
-```bash
-yarn add eve-map-3d
 ```
 
 ## 依赖要求
@@ -58,20 +42,20 @@ npm install react react-dom @react-three/fiber @react-three/drei three
 首先需要准备 EVE Online 的星图数据。数据格式应为 JSONL（每行一个 JSON 对象）。
 
 **必需的数据文件：**
+
 - `mapSolarSystems.jsonl` - 太阳系数据
 - `mapStargates.jsonl` - 星门连接数据
 - `mapRegions.jsonl` - 星域数据（可选）
 
 **数据格式示例：**
 
+你可以在sde中找到这几个文件，你可以处理只保留需要的数据
+
 ```json
-// mapSolarSystems.jsonl
 {"_key":30000001,"name":{"zh":"Tanoo","en":"Tanoo"},"position":{"x":161891117336.0,"y":212888732625.0,"z":-73178333011.0},"regionID":10000001,"constellationID":20000001,"securityStatus":0.8583240509033203}
 
-// mapStargates.jsonl
 {"_key":50000001,"solarSystemID":30000001,"destination":{"solarSystemID":30000002,"stargateID":50000002},"position":{"x":161891117336.0,"y":212888732625.0,"z":-73178333011.0},"typeID":29624}
 
-// mapRegions.jsonl
 {"_key":10000001,"name":{"zh":"Derelik","en":"Derelik"},"position":{"x":0.0,"y":0.0,"z":0.0},"constellationIDs":[20000001,20000002]}
 ```
 
@@ -138,7 +122,6 @@ function App() {
           loadRegions(),
         ]);
         
-        // 静态数据保存到 state
         setSystems(systemsData);
         setStargates(stargatesData);
         setRegions(regionsData);
@@ -158,7 +141,6 @@ function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      {/* 静态数据作为 props 传入，动态配置通过 mapControl */}
       <EveMap3D 
         systems={systems}
         stargates={stargates}
@@ -193,6 +175,7 @@ export default App;
 返回一个 `MapControl` 对象，用于配置和控制地图。
 
 **参数：**
+
 - `initialConfig`: 初始配置（可选）
 
 **返回：**`MapControl` 对象
@@ -200,7 +183,6 @@ export default App;
 **配置方法：**
 
 ```tsx
-// 创建 mapControl，配置动态选项（不包括静态数据）
 const mapControl = useMapControl({
   language: 'zh',
   filterNewEdenOnly: true,
@@ -283,13 +265,13 @@ const highlightedSystemIds = mapControl.getHighlightedSystemIds();
 
 #### `MapControlConfig`
 
-动态配置都通过 `MapControl` 的 `setConfig` 方法设置（不包括静态数据）：
+动态配置都通过 `MapControl` 的 `setConfig` 方法设置：
 
 ```typescript
 interface MapControlConfig {
   // 显示设置
   language?: 'zh' | 'en';              // 语言设置（默认 'zh'）
-  filterNewEdenOnly?: boolean;         // 是否只显示 New Eden 星系（默认 true）
+  filterNewEdenOnly?: boolean = true;         // 是否只显示 New Eden 星系
   systemFilter?: (system: SolarSystem) => boolean; // 自定义过滤函数
   
   // 样式配置
@@ -310,8 +292,6 @@ interface MapControlConfig {
     onRegionClick?: (region: Region) => void;
   };
 }
-
-// 注意：静态数据（systems, stargates, jumpgates, regions）作为 EveMap3D 组件的 props 传入
 ```
 
 ### 类型定义
@@ -397,7 +377,7 @@ interface SecurityColorConfig {
 
 ```typescript
 interface CustomStyleConfig {
-  backgroundColor?: string;                    // 背景颜色
+  backgroundColor?: string;                   // 背景颜色
   connectionLineColor?: string;               // 连接线颜色
   connectionLineOpacity?: number;             // 连接线透明度
   highlightedConnectionLineColor?: string;    // 高亮连接线颜色
@@ -671,24 +651,6 @@ const mapControl = useMapControl({
 />
 ```
 
-## 设计理念
-
-本库采用统一的 `mapControl` API 设计，具有以下优势：
-
-1. **职责分离**：静态数据（systems, stargates, regions）作为 props 传入，动态配置和状态通过 `mapControl` 管理，清晰分离数据和控制逻辑。
-
-2. **一致性增强**：所有导致摄像机位置改变的操作（点击、选择、高亮等）都通过 `mapControl` 进行，确保行为一致。
-
-3. **简化接口**：`EveMap3D` 组件接口清晰，静态数据通过 props，动态行为通过 mapControl。
-
-4. **灵活配置**：可以通过 `mapControl.setConfig()` 动态更新任何配置，无需重新创建组件。
-
-5. **状态管理**：`mapControl` 内部管理所有状态（选中的星系、高亮的星域等），外部通过统一的 API 访问和修改。
-
-6. **程序化控制**：提供丰富的方法来程序化控制地图，包括相机操作、系统选择、星域高亮等。
-
-7. **性能优化**：静态数据不会触发配置更新，避免不必要的重新渲染。
-
 ## 操作说明
 
 - **鼠标左键拖拽**: 旋转视角
@@ -697,31 +659,3 @@ const mapControl = useMapControl({
 - **点击星系**: 选择星系（会自动聚焦和高亮）
 - **点击星域标签**: 高亮星域（会自动聚焦）
 - **右键菜单**: 提供重置相机、取消选择等操作
-
-## 开发
-
-### 构建库
-
-```bash
-pnpm build:lib
-```
-
-### 开发模式
-
-```bash
-pnpm dev
-```
-
-### 预览
-
-```bash
-pnpm preview
-```
-
-## 许可证
-
-MIT
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
