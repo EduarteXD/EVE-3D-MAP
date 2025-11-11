@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SolarSystem } from '../../types';
+import type { SolarSystem } from '../types';
 
 export function SelectionRing({ system }: { system: SolarSystem }) {
 	const ringRef = useRef<THREE.Mesh>(null);

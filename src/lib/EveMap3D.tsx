@@ -1,128 +1,61 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { EveMap3DProps, Region, SolarSystem } from './types';
-import { Scene } from './components/eveMap3D/Scene';
-import { Compass2DOverlay } from './components/eveMap3D/Compass2D';
-import { ContextMenu, type ContextMenuItem } from './components/eveMap3D/ContextMenu';
+import { Scene } from './components/Scene';
+import { Compass2DOverlay } from './components/Compass2D';
+import { ContextMenu, type ContextMenuItem } from './components/ContextMenu';
 
 // 主组件
-export default function EveMap3D({
-  systems,
-  stargates,
-  jumpgates = [],
-  regions,
-  language = 'zh',
-  systemRenderConfigs,
-  securityColors,
-  focus,
-  events,
-  style,
-  filterNewEdenOnly = true,
-  highlightedRegionId: externalHighlightedRegionId,
-  systemFilter,
-  containerStyle,
-  containerClassName,
-  mapControl,
-  jumpDriveConfig,
+export default function EveMap3D({ 
+  systems, 
+  stargates, 
+  jumpgates = [], 
+  regions, 
+  mapControl 
 }: EveMap3DProps) {
-  const [highlightedSystemIds, setHighlightedSystemIds] = useState<Set<number>>(new Set());
-  const [selectedSystemId, setSelectedSystemId] = useState<number | null>(null);
-  const [internalHighlightedRegionId, setInternalHighlightedRegionId] = useState<number | null>(null);
   const [compassRotation, setCompassRotation] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // 使用外部传入的highlightedRegionId，如果没有则使用内部状态或focus
-  const highlightedRegionId = useMemo(() => {
-    if (externalHighlightedRegionId !== undefined) {
-      return externalHighlightedRegionId;
+  // 订阅 mapControl 的状态变化
+  const subscribe = useCallback((callback: () => void) => {
+    if (mapControl.__internal?.subscribe) {
+      return mapControl.__internal.subscribe(callback);
     }
-    if (internalHighlightedRegionId !== null) {
-      return internalHighlightedRegionId;
-    }
-    if (focus?.type === 'region') {
-      return focus.targetId;
-    }
-    return null;
-  }, [externalHighlightedRegionId, internalHighlightedRegionId, focus]);
+    return () => {};
+  }, [mapControl]);
 
-  // 当外部highlightedRegionId变化时（用户选择星域），清除选中的星系和高亮状态
-  useEffect(() => {
-    if (externalHighlightedRegionId !== undefined) {
-      // 外部传入了highlightedRegionId（无论是null还是数字），清除选中的星系和高亮状态
-      // 立即清除所有相关状态，避免被其他逻辑覆盖
-      setHighlightedSystemIds(new Set());
-      setSelectedSystemId(null);
-      setInternalHighlightedRegionId(null);
-    }
-  }, [externalHighlightedRegionId]);
+  const getSnapshot = useCallback(() => {
+    // 返回版本号而不是时间戳，只有在状态真正改变时才会触发重渲染
+    return mapControl.__internal?.getVersion() ?? 0;
+  }, [mapControl]);
 
-  // 根据focus更新高亮系统和选中状态
-  useEffect(() => {
-    if (focus) {
-      if (focus.type === 'system') {
-        setSelectedSystemId(focus.targetId);
-        setHighlightedSystemIds(new Set([focus.targetId]));
-        // 找到该星系所在的星域并高亮
-        const system = systems.find(s => s._key === focus.targetId);
-        if (system && externalHighlightedRegionId === undefined) {
-          setInternalHighlightedRegionId(system.regionID);
-        }
-      } else if (focus.type === 'region') {
-        // 聚焦到星域时清除选中状态
-        setSelectedSystemId(null);
-        setInternalHighlightedRegionId(null);
-        const newSet = new Set<number>();
-        setHighlightedSystemIds(newSet);
-      }
-    }
-  }, [focus, systems, externalHighlightedRegionId]);
+  // 使用 useSyncExternalStore 订阅状态变化
+  const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  // 当selectedSystemId变化时（用户点击），更新highlightedSystemIds并聚焦
-  useEffect(() => {
-    // 如果外部传入了highlightedRegionId，不允许通过点击星系来设置高亮
-    if (externalHighlightedRegionId !== undefined) {
-      return;
-    }
-    
-    if (selectedSystemId !== null && (!focus || focus.type !== 'system')) {
-      // 只有在没有focus或focus不是system时才更新highlightedSystemIds
-      // 清除之前的高亮系统，只保留新选中的系统
-      setHighlightedSystemIds(new Set([selectedSystemId]));
-      
-      // 自动聚焦到选中的星系
-      if (mapControl?.focusSystem) {
-        mapControl.focusSystem(selectedSystemId);
-      }
-      
-      // 高亮该星系所在的星域
-      const system = systems.find(s => s._key === selectedSystemId);
-      if (system) {
-        setInternalHighlightedRegionId(system.regionID);
-      }
-    }
-  }, [selectedSystemId, focus, mapControl, systems, externalHighlightedRegionId]);
+  // 从 mapControl 获取配置和状态
+  const config = mapControl.getConfig();
+  const selectedSystemId = mapControl.getSelectedSystemId();
+  const highlightedRegionId = mapControl.getHighlightedRegionId();
+  const highlightedSystemIds = useMemo(
+    () => new Set(mapControl.getHighlightedSystemIds()), 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version] // 依赖版本号而不是 mapControl
+  );
 
   const handleSystemClick = useCallback(
     (system: SolarSystem) => {
-      // 更新选中状态
-      setSelectedSystemId(system._key);
-      
-      // 调用外部回调
-      if (events?.onSystemClick) {
-        events.onSystemClick(system);
-      }
+      // 通过 mapControl 选择星系，会自动处理聚焦和高亮
+      mapControl.selectSystem(system._key);
     },
-    [events]
+    [mapControl]
   );
 
   const handleRegionClick = useCallback(
     (region: Region) => {
-      // 调用外部回调
-      if (events?.onRegionClick) {
-        events.onRegionClick(region);
-      }
+      // 通过 mapControl 高亮星域，会自动处理聚焦
+      mapControl.highlightRegion(region._key);
     },
-    [events]
+    [mapControl]
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -137,13 +70,11 @@ export default function EveMap3D({
   const contextMenuItems: ContextMenuItem[] = useMemo(() => {
     const items: ContextMenuItem[] = [
       {
-        label: language === 'zh' ? '重置视角' : 'Reset Camera',
+        label: config.language === 'zh' ? '重置视角' : 'Reset Camera',
         onClick: () => {
-          if (mapControl?.resetCamera) {
-            mapControl.resetCamera();
-          }
+          mapControl.resetCamera();
+          mapControl.highlightRegion(null);
         },
-        disabled: !mapControl?.resetCamera,
       },
     ];
 
@@ -153,20 +84,16 @@ export default function EveMap3D({
       if (selectedSystem) {
         items.push({ label: '', onClick: () => {}, divider: true });
         items.push({
-          label: language === 'zh' ? '取消选择' : 'Deselect',
+          label: config.language === 'zh' ? '取消选择' : 'Deselect',
           onClick: () => {
-            setSelectedSystemId(null);
-            setHighlightedSystemIds(new Set());
+            mapControl.selectSystem(null);
           },
         });
         items.push({
-          label: language === 'zh' ? '聚焦到星系' : 'Focus System',
+          label: config.language === 'zh' ? '聚焦到星系' : 'Focus System',
           onClick: () => {
-            if (mapControl?.focusSystem) {
-              mapControl.focusSystem(selectedSystemId);
-            }
+            mapControl.focusSystem(selectedSystemId);
           },
-          disabled: !mapControl?.focusSystem,
         });
       }
     }
@@ -177,24 +104,21 @@ export default function EveMap3D({
       if (region) {
         items.push({ label: '', onClick: () => {}, divider: true });
         items.push({
-          label: language === 'zh' ? '聚焦到星域' : 'Focus Region',
+          label: config.language === 'zh' ? '聚焦到星域' : 'Focus Region',
           onClick: () => {
-            if (mapControl?.focusRegion) {
-              mapControl.focusRegion(highlightedRegionId);
-            }
+            mapControl.focusRegion(highlightedRegionId);
           },
-          disabled: !mapControl?.focusRegion,
         });
       }
     }
 
     return items;
-  }, [language, mapControl, selectedSystemId, highlightedRegionId, systems, regions]);
+  }, [config.language, systems, regions, mapControl, selectedSystemId, highlightedRegionId]);
 
   return (
     <div
-      style={{ width: '100%', height: '100%', position: 'relative', ...containerStyle }}
-      className={containerClassName}
+      style={{ width: '100%', height: '100%', position: 'relative', ...config.containerStyle }}
+      className={config.containerClassName}
       onContextMenu={handleContextMenu}
     >
       <Canvas
@@ -216,17 +140,14 @@ export default function EveMap3D({
           highlightedRegionId={highlightedRegionId}
           highlightedSystemIds={highlightedSystemIds}
           selectedSystemId={selectedSystemId}
-          systemRenderConfigs={systemRenderConfigs}
-          securityColors={securityColors}
-          language={language}
-          style={style}
-          focus={focus}
-          onFocusComplete={events?.onFocusComplete}
-          filterNewEdenOnly={filterNewEdenOnly}
-          systemFilter={systemFilter}
+          systemRenderConfigs={config.systemRenderConfigs}
+          securityColors={config.securityColors}
+          language={config.language || 'zh'}
+          style={config.style}
+          filterNewEdenOnly={config.filterNewEdenOnly}
+          systemFilter={config.systemFilter}
           mapControl={mapControl}
-          externalHighlightedRegionId={externalHighlightedRegionId}
-          jumpDriveConfig={jumpDriveConfig}
+          jumpDriveConfig={config.jumpDriveConfig}
           onCompassRotationChange={setCompassRotation}
         />
       </Canvas>
@@ -242,4 +163,3 @@ export default function EveMap3D({
     </div>
   );
 }
-

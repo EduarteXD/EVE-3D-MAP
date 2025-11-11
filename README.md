@@ -13,6 +13,7 @@
 -  自定义颜色和样式
 -  多语言支持（中文/英文）
 -  高性能渲染（使用 InstancedMesh）
+-  统一的 mapControl API，所有配置和操作通过单一接口管理
 
 ## 安装
 
@@ -109,14 +110,24 @@ export async function loadRegions(): Promise<Region[]> {
 ```tsx
 import { useState, useEffect } from 'react';
 import { EveMap3D, useMapControl } from 'eve-map-3d';
+import type { SolarSystem, Stargate, Region } from 'eve-map-3d';
 import { loadSolarSystems, loadStargates, loadRegions } from './utils/loadEveData';
 
 function App() {
-  const mapControl = useMapControl();
   const [systems, setSystems] = useState<SolarSystem[]>([]);
   const [stargates, setStargates] = useState<Stargate[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // 创建 mapControl，配置动态选项
+  const mapControl = useMapControl({
+    language: 'zh',
+    events: {
+      onSystemClick: (system) => {
+        console.log('点击了星系:', system);
+      },
+    },
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -126,9 +137,12 @@ function App() {
           loadStargates(),
           loadRegions(),
         ]);
+        
+        // 静态数据保存到 state
         setSystems(systemsData);
         setStargates(stargatesData);
         setRegions(regionsData);
+        
         setLoading(false);
       } catch (error) {
         console.error('加载数据失败:', error);
@@ -144,17 +158,12 @@ function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <EveMap3D
+      {/* 静态数据作为 props 传入，动态配置通过 mapControl */}
+      <EveMap3D 
         systems={systems}
         stargates={stargates}
         regions={regions}
-        language="zh"
-        mapControl={mapControl}
-        events={{
-          onSystemClick: (system) => {
-            console.log('点击了星系:', system);
-          },
-        }}
+        mapControl={mapControl} 
       />
     </div>
   );
@@ -169,47 +178,140 @@ export default App;
 
 #### `EveMap3D`
 
-| 属性 | 类型 | 必需 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `systems` | `SolarSystem[]` | ✅ | - | 太阳系数据数组 |
-| `stargates` | `Stargate[]` | ✅ | - | 星门连接数据数组 |
-| `regions` | `Region[]` | ❌ | `[]` | 星域数据数组（用于显示星域标签） |
-| `language` | `'zh' \| 'en'` | ❌ | `'zh'` | 语言设置 |
-| `filterNewEdenOnly` | `boolean` | ❌ | `true` | 是否只显示 New Eden 星系 |
-| `systemFilter` | `(system: SolarSystem) => boolean` | ❌ | - | 自定义过滤函数 |
-| `systemRenderConfigs` | `SystemRenderConfig[]` | ❌ | - | 星系渲染配置（自定义颜色、大小等） |
-| `securityColors` | `SecurityColorConfig` | ❌ | - | 安全等级颜色配置 |
-| `highlightedRegionId` | `number \| null` | ❌ | - | 高亮的星域ID |
-| `focus` | `FocusConfig` | ❌ | - | 聚焦配置 |
-| `events` | `EveMap3DEvents` | ❌ | - | 事件回调 |
-| `style` | `CustomStyleConfig` | ❌ | - | 自定义样式 |
-| `mapControl` | `MapControl` | ❌ | - | 地图控制对象（通过 `useMapControl` 生成） |
-| `containerStyle` | `React.CSSProperties` | ❌ | - | 容器样式 |
-| `containerClassName` | `string` | ❌ | - | 容器类名 |
+| 属性 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `systems` | `SolarSystem[]` | ✅ | 太阳系数据数组（静态数据） |
+| `stargates` | `Stargate[]` | ✅ | 星门连接数据数组（静态数据） |
+| `jumpgates` | `Jumpgate[]` | ❌ | 跳桥连接数据数组（可选） |
+| `regions` | `Region[]` | ❌ | 星域数据数组（可选） |
+| `mapControl` | `MapControl` | ✅ | 地图控制对象（通过 `useMapControl` 生成，管理动态配置） |
 
 ### Hook
 
-#### `useMapControl()`
+#### `useMapControl(initialConfig?: Partial<MapControlConfig>)`
 
-返回一个 `MapControl` 对象，用于程序化控制地图。
+返回一个 `MapControl` 对象，用于配置和控制地图。
+
+**参数：**
+- `initialConfig`: 初始配置（可选）
+
+**返回：**`MapControl` 对象
+
+**配置方法：**
 
 ```tsx
-const mapControl = useMapControl();
+// 创建 mapControl，配置动态选项（不包括静态数据）
+const mapControl = useMapControl({
+  language: 'zh',
+  filterNewEdenOnly: true,
+  events: {
+    onSystemClick: (system) => console.log('点击星系:', system),
+    onRegionClick: (region) => console.log('点击星域:', region),
+  },
+  style: {
+    backgroundColor: '#000000',
+    connectionLineColor: '#ffffff',
+  },
+  jumpDriveConfig: {
+    originSystemId: 30000142,
+    rangeLightYears: 5.0,
+  },
+});
 
-// 重置相机
-mapControl.resetCamera?.();
+// 动态更新配置
+mapControl.setConfig({
+  language: 'en',
+  filterNewEdenOnly: false,
+});
 
-// 聚焦到指定星系
-mapControl.focusSystem?.(30000001);
+// 获取当前配置
+const currentConfig = mapControl.getConfig();
+```
 
-// 聚焦到指定星域
-mapControl.focusRegion?.(10000001);
+**相机控制方法：**
+
+```tsx
+// 重置相机到初始位置
+mapControl.resetCamera();
+
+// 聚焦到指定星系（会自动移动摄像机）
+mapControl.focusSystem(30000001);
+mapControl.focusSystem(30000001, 2000); // 指定动画时长
+
+// 聚焦到指定星域（会自动移动摄像机）
+mapControl.focusRegion(10000001);
+mapControl.focusRegion(10000001, 1500); // 指定动画时长
 
 // 设置相机位置
-mapControl.setCameraPosition?.(0, 0, 100000000000);
+mapControl.setCameraPosition(0, 0, 1e17);
+
+// 设置相机目标
+mapControl.setCameraTarget(0, 0, 0);
 
 // 获取相机位置
-const position = mapControl.getCameraPosition?.();
+const position = mapControl.getCameraPosition();
+
+// 获取相机目标
+const target = mapControl.getCameraTarget();
+```
+
+**状态控制方法：**
+
+```tsx
+// 选择星系（会自动聚焦和高亮，并移动摄像机）
+mapControl.selectSystem(30000001);
+mapControl.selectSystem(null); // 取消选择
+
+// 获取当前选中的星系ID
+const selectedId = mapControl.getSelectedSystemId();
+
+// 高亮星域（会自动移动摄像机）
+mapControl.highlightRegion(10000001);
+mapControl.highlightRegion(null); // 取消高亮
+
+// 获取当前高亮的星域ID
+const highlightedRegionId = mapControl.getHighlightedRegionId();
+
+// 高亮星系（不会自动移动摄像机）
+mapControl.highlightSystems([30000001, 30000002]);
+
+// 获取当前高亮的星系ID列表
+const highlightedSystemIds = mapControl.getHighlightedSystemIds();
+```
+
+### 配置接口
+
+#### `MapControlConfig`
+
+动态配置都通过 `MapControl` 的 `setConfig` 方法设置（不包括静态数据）：
+
+```typescript
+interface MapControlConfig {
+  // 显示设置
+  language?: 'zh' | 'en';              // 语言设置（默认 'zh'）
+  filterNewEdenOnly?: boolean;         // 是否只显示 New Eden 星系（默认 true）
+  systemFilter?: (system: SolarSystem) => boolean; // 自定义过滤函数
+  
+  // 样式配置
+  systemRenderConfigs?: SystemRenderConfig[];   // 星系渲染配置
+  securityColors?: SecurityColorConfig;          // 安全等级颜色配置
+  style?: CustomStyleConfig;                     // 自定义样式
+  
+  // 容器样式
+  containerStyle?: React.CSSProperties;  // 容器样式
+  containerClassName?: string;           // 容器类名
+  
+  // 跳跃引擎配置
+  jumpDriveConfig?: JumpDriveConfig;     // 跳跃引擎配置
+  
+  // 事件回调
+  events?: {
+    onSystemClick?: (system: SolarSystem) => void;
+    onRegionClick?: (region: Region) => void;
+  };
+}
+
+// 注意：静态数据（systems, stargates, jumpgates, regions）作为 EveMap3D 组件的 props 传入
 ```
 
 ### 类型定义
@@ -254,6 +356,15 @@ interface Region {
 }
 ```
 
+#### `Jumpgate`
+
+```typescript
+interface Jumpgate {
+  fromSystemId: number;  // 起始星系ID
+  toSystemId: number;    // 目标星系ID
+}
+```
+
 #### `SystemRenderConfig`
 
 用于自定义单个星系的渲染样式：
@@ -280,30 +391,6 @@ interface SecurityColorConfig {
 }
 ```
 
-#### `FocusConfig`
-
-用于聚焦到特定星系或星域：
-
-```typescript
-interface FocusConfig {
-  type: 'system' | 'region';  // 聚焦类型
-  targetId: number;            // 目标ID
-  highlight?: boolean;         // 是否高亮
-  animationDuration?: number;  // 动画时长（毫秒，默认1500）
-}
-```
-
-#### `EveMap3DEvents`
-
-事件回调：
-
-```typescript
-interface EveMap3DEvents {
-  onSystemClick?: (system: SolarSystem) => void;      // 点击星系时触发
-  onFocusComplete?: (config: FocusConfig) => void;    // 聚焦完成时触发
-}
-```
-
 #### `CustomStyleConfig`
 
 自定义样式：
@@ -314,8 +401,31 @@ interface CustomStyleConfig {
   connectionLineColor?: string;               // 连接线颜色
   connectionLineOpacity?: number;             // 连接线透明度
   highlightedConnectionLineColor?: string;    // 高亮连接线颜色
+  jumpgateLineColor?: string;                 // 跳桥连接线颜色
+  jumpgateLineOpacity?: number;               // 跳桥连接线透明度
+  highlightedJumpgateLineColor?: string;      // 高亮跳桥连接线颜色
   labelFontSize?: number;                     // 标签字体大小
   labelColor?: string;                        // 标签颜色
+}
+```
+
+#### `JumpDriveConfig`
+
+跳跃引擎配置：
+
+```typescript
+interface JumpDriveConfig {
+  originSystemId?: number;              // 起始星系ID（优先使用）
+  originPosition?: { x: number; y: number; z: number };  // 自定义起始位置
+  rangeLightYears: number;              // 跳跃距离（单位：光年）
+  showBubble?: boolean;                 // 是否渲染可达泡泡（默认 true）
+  bubbleColor?: string;                 // 泡泡颜色（默认 '#00ffff'）
+  bubbleOpacity?: number;               // 泡泡透明度（默认 0.12）
+  bubbleWireframeOpacity?: number;      // 泡泡线框透明度（默认 0.35）
+  showReachableSystems?: boolean;       // 是否高亮可达星系（默认 true）
+  reachableSystemColor?: string;        // 可达星系颜色（默认 '#00ffff'）
+  reachableSystemSizeMultiplier?: number;  // 可达星系大小倍数（默认 1.6）
+  reachableSystemOpacity?: number;      // 可达星系透明度（默认 1.0）
 }
 ```
 
@@ -326,16 +436,17 @@ interface CustomStyleConfig {
 ```tsx
 import { EveMap3D, useMapControl } from 'eve-map-3d';
 
-function BasicExample() {
-  const mapControl = useMapControl();
+function BasicExample({ systems, stargates, regions }) {
+  const mapControl = useMapControl({
+    language: 'zh',
+  });
   
   return (
-    <EveMap3D
+    <EveMap3D 
       systems={systems}
       stargates={stargates}
       regions={regions}
-      language="zh"
-      mapControl={mapControl}
+      mapControl={mapControl} 
     />
   );
 }
@@ -344,25 +455,26 @@ function BasicExample() {
 ### 示例 2: 自定义颜色
 
 ```tsx
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  securityColors={{
+const mapControl = useMapControl({
+  securityColors: {
     highsec: '#00FF00',  // 高安：绿色
     lowsec: '#FFFF00',   // 低安：黄色
     nullsec: '#FF0000',  // 00：红色
-  }}
-  mapControl={mapControl}
+  },
+});
+
+<EveMap3D 
+  systems={systems}
+  stargates={stargates}
+  mapControl={mapControl} 
 />
 ```
 
 ### 示例 3: 自定义星系样式
 
 ```tsx
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  systemRenderConfigs={[
+const mapControl = useMapControl({
+  systemRenderConfigs: [
     {
       systemId: 30000001,
       color: '#FF00FF',
@@ -375,50 +487,69 @@ function BasicExample() {
       color: '#00FFFF',
       size: 1.5,
     },
-  ]}
-  mapControl={mapControl}
+  ],
+});
+
+<EveMap3D 
+  systems={systems}
+  stargates={stargates}
+  mapControl={mapControl} 
 />
 ```
 
 ### 示例 4: 事件处理
 
 ```tsx
-const [selectedSystem, setSelectedSystem] = useState<SolarSystem | null>(null);
-
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  mapControl={mapControl}
-  events={{
+const mapControl = useMapControl({
+  events: {
     onSystemClick: (system) => {
-      setSelectedSystem(system);
       console.log('选中星系:', system.name.zh || system.name.en);
     },
-    onFocusComplete: (config) => {
-      console.log('聚焦完成:', config);
+    onRegionClick: (region) => {
+      console.log('点击星域:', region.name.zh || region.name.en);
     },
-  }}
-/>
+  },
+});
 
-{selectedSystem && (
-  <div>
-    <h3>{selectedSystem.name.zh || selectedSystem.name.en}</h3>
-    <p>安全等级: {selectedSystem.securityStatus.toFixed(2)}</p>
-  </div>
-)}
+// 从 mapControl 获取当前选中的星系
+const selectedSystemId = mapControl.getSelectedSystemId();
+const selectedSystem = selectedSystemId 
+  ? systems.find(s => s._key === selectedSystemId) 
+  : null;
+
+// 渲染
+<>
+  <EveMap3D 
+    systems={systems}
+    stargates={stargates}
+    mapControl={mapControl} 
+  />
+  {selectedSystem && (
+    <div>
+      <h3>{selectedSystem.name.zh || selectedSystem.name.en}</h3>
+      <p>安全等级: {selectedSystem.securityStatus.toFixed(2)}</p>
+    </div>
+  )}
+</>
 ```
 
-### 示例 5: 程序化控制
+### 示例 5: 程序化控制（所有摄像机操作通过 mapControl）
 
 ```tsx
-function ControlledExample() {
+function ControlledExample({ systems, stargates }) {
   const mapControl = useMapControl();
   const [systemId, setSystemId] = useState<number | null>(null);
 
-  const handleFocusSystem = () => {
+  const handleSelectSystem = () => {
     if (systemId) {
-      mapControl.focusSystem?.(systemId);
+      // 选择星系会自动聚焦和高亮，并移动摄像机
+      mapControl.selectSystem(systemId);
     }
+  };
+
+  const handleFocusRegion = (regionId: number) => {
+    // 高亮星域会自动移动摄像机
+    mapControl.highlightRegion(regionId);
   };
 
   return (
@@ -429,110 +560,143 @@ function ControlledExample() {
         onChange={(e) => setSystemId(Number(e.target.value))}
         placeholder="输入星系ID"
       />
-      <button onClick={handleFocusSystem}>聚焦到星系</button>
-      <button onClick={() => mapControl.resetCamera?.()}>重置相机</button>
+      <button onClick={handleSelectSystem}>选择星系</button>
+      <button onClick={() => mapControl.resetCamera()}>重置相机</button>
       
-      <EveMap3D
+      <EveMap3D 
         systems={systems}
         stargates={stargates}
-        mapControl={mapControl}
+        mapControl={mapControl} 
       />
     </div>
   );
 }
 ```
 
-### 示例 6: 高亮星域
+### 示例 6: 动态更新配置
 
 ```tsx
-const [highlightedRegionId, setHighlightedRegionId] = useState<number | null>(null);
+function DynamicConfigExample({ systems, stargates }) {
+  const mapControl = useMapControl({
+    language: 'zh',
+  });
 
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  regions={regions}
-  highlightedRegionId={highlightedRegionId}
-  mapControl={mapControl}
-/>
+  // 切换语言
+  const toggleLanguage = () => {
+    const currentConfig = mapControl.getConfig();
+    mapControl.setConfig({
+      language: currentConfig.language === 'zh' ? 'en' : 'zh',
+    });
+  };
 
-<select
-  value={highlightedRegionId || ''}
-  onChange={(e) => setHighlightedRegionId(Number(e.target.value) || null)}
->
-  <option value="">无</option>
-  {regions.map(region => (
-    <option key={region._key} value={region._key}>
-      {region.name.zh || region.name.en}
-    </option>
-  ))}
-</select>
+  // 切换过滤
+  const showOnlyHighSec = () => {
+    mapControl.setConfig({
+      systemFilter: (system) => system.securityStatus >= 0.45,
+    });
+  };
+
+  return (
+    <div>
+      <button onClick={toggleLanguage}>切换语言</button>
+      <button onClick={showOnlyHighSec}>只显示高安</button>
+      <button onClick={() => mapControl.setConfig({ systemFilter: undefined })}>
+        显示全部
+      </button>
+      
+      <EveMap3D 
+        systems={systems}
+        stargates={stargates}
+        mapControl={mapControl} 
+      />
+    </div>
+  );
+}
 ```
 
-### 示例 7: 自定义过滤
+### 示例 7: 跳跃引擎配置
 
 ```tsx
-// 只显示高安星系
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  systemFilter={(system) => system.securityStatus >= 0.45}
-  mapControl={mapControl}
-/>
+const mapControl = useMapControl({
+  jumpDriveConfig: {
+    originSystemId: 30000142, // Jita
+    rangeLightYears: 5.0,
+    showBubble: true,
+    bubbleColor: '#00ffff',
+    bubbleOpacity: 0.15,
+    showReachableSystems: true,
+    reachableSystemColor: '#00ffff',
+    reachableSystemSizeMultiplier: 1.8,
+  },
+});
 
-// 只显示特定星域的星系
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  systemFilter={(system) => system.regionID === 10000001}
-  mapControl={mapControl}
-/>
-```
-
-### 示例 8: 聚焦配置
-
-```tsx
-const [focus, setFocus] = useState<FocusConfig | undefined>();
-
-// 聚焦到星系
-const focusToSystem = (systemId: number) => {
-  setFocus({
-    type: 'system',
-    targetId: systemId,
-    highlight: true,
-    animationDuration: 2000,
-  });
-};
-
-// 聚焦到星域
-const focusToRegion = (regionId: number) => {
-  setFocus({
-    type: 'region',
-    targetId: regionId,
-    highlight: true,
-  });
-};
-
-<EveMap3D
-  systems={systems}
-  stargates={stargates}
-  regions={regions}
-  focus={focus}
-  mapControl={mapControl}
-  events={{
-    onFocusComplete: (config) => {
-      console.log('聚焦完成:', config);
-      setFocus(undefined); // 清除聚焦配置
+// 动态更新跳跃引擎配置
+const updateJumpDrive = (newSystemId: number) => {
+  mapControl.setConfig({
+    jumpDriveConfig: {
+      originSystemId: newSystemId,
+      rangeLightYears: 6.0,
     },
-  }}
+  });
+};
+
+<EveMap3D 
+  systems={systems}
+  stargates={stargates}
+  mapControl={mapControl} 
 />
 ```
+
+### 示例 8: 跳桥配置
+
+```tsx
+const jumpgates = [
+  { fromSystemId: 30000142, toSystemId: 30002187 },
+  { fromSystemId: 30002187, toSystemId: 30004759 },
+];
+
+const mapControl = useMapControl({
+  style: {
+    jumpgateLineColor: '#ff00ff',
+    jumpgateLineOpacity: 0.8,
+    highlightedJumpgateLineColor: '#ffff00',
+  },
+});
+
+<EveMap3D 
+  systems={systems}
+  stargates={stargates}
+  jumpgates={jumpgates}
+  mapControl={mapControl} 
+/>
+```
+
+## 设计理念
+
+本库采用统一的 `mapControl` API 设计，具有以下优势：
+
+1. **职责分离**：静态数据（systems, stargates, regions）作为 props 传入，动态配置和状态通过 `mapControl` 管理，清晰分离数据和控制逻辑。
+
+2. **一致性增强**：所有导致摄像机位置改变的操作（点击、选择、高亮等）都通过 `mapControl` 进行，确保行为一致。
+
+3. **简化接口**：`EveMap3D` 组件接口清晰，静态数据通过 props，动态行为通过 mapControl。
+
+4. **灵活配置**：可以通过 `mapControl.setConfig()` 动态更新任何配置，无需重新创建组件。
+
+5. **状态管理**：`mapControl` 内部管理所有状态（选中的星系、高亮的星域等），外部通过统一的 API 访问和修改。
+
+6. **程序化控制**：提供丰富的方法来程序化控制地图，包括相机操作、系统选择、星域高亮等。
+
+7. **性能优化**：静态数据不会触发配置更新，避免不必要的重新渲染。
 
 ## 操作说明
 
 - **鼠标左键拖拽**: 旋转视角
 - **鼠标右键拖拽**: 平移视角
 - **滚轮**: 缩放
-- **点击星系**: 查看星系详情（触发 `onSystemClick` 事件）
+- **点击星系**: 选择星系（会自动聚焦和高亮）
+- **点击星域标签**: 高亮星域（会自动聚焦）
+- **右键菜单**: 提供重置相机、取消选择等操作
 
 ## 开发
 

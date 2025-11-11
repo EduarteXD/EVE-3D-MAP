@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
-import type { Language, SolarSystem } from '../../types';
+import type { Language, SolarSystem } from '../types';
 
 // 根据安全等级获取颜色
 function getSecurityColor(securityStatus: number): string {
@@ -25,11 +25,13 @@ export function SolarSystemLabel({
 	language,
 	style,
 	isHighlightedRegion = false,
+	visible = true,
 }: {
 	system: SolarSystem;
 	language: Language;
 	style?: { labelFontSize?: number; labelColor?: string };
 	isHighlightedRegion?: boolean;
+	visible?: boolean;
 }) {
 	const groupRef = useRef<THREE.Group>(null);
 	const nameTextRef = useRef<THREE.Mesh>(null);
@@ -49,7 +51,28 @@ export function SolarSystemLabel({
 				groupRef.current.visible = false;
 				return;
 			}
+			
+			// 根据遮挡检测结果控制可见性
 			groupRef.current.visible = true;
+			
+			// 设置透明度：被遮挡的标签降低透明度
+			const targetOpacity = visible ? 1.0 : 0.3;
+			const setOpacity = (mat: THREE.Material) => {
+				if (mat.transparent !== true) {
+					mat.transparent = true;
+				}
+				mat.opacity = targetOpacity;
+			};
+			if (Array.isArray(nameTextRef.current.material)) {
+				nameTextRef.current.material.forEach(setOpacity);
+			} else if (nameTextRef.current.material) {
+				setOpacity(nameTextRef.current.material);
+			}
+			if (Array.isArray(secTextRef.current.material)) {
+				secTextRef.current.material.forEach(setOpacity);
+			} else if (secTextRef.current.material) {
+				setOpacity(secTextRef.current.material);
+			}
 			const toCamera = new THREE.Vector3().subVectors(camera.position, systemPosition);
 			const cameraDirection = toCamera.clone().normalize();
 			const up = new THREE.Vector3(0, 1, 0);

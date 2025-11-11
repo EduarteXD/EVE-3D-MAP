@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
-import type { Language, Region, SolarSystem } from '../../types';
+import type { Language, MapControl, Region, SolarSystem } from '../types';
 
 export function RegionLabel({
 	region,
@@ -12,6 +12,7 @@ export function RegionLabel({
 	style,
 	isHighlighted = false,
 	onClick,
+	mapControl,
 }: {
 	region: Region;
 	systems: SolarSystem[];
@@ -20,6 +21,7 @@ export function RegionLabel({
 	style?: { labelFontSize?: number; labelColor?: string };
 	isHighlighted?: boolean;
 	onClick?: (region: Region) => void;
+	mapControl?: MapControl;
 }) {
 	const textRef = useRef<THREE.Mesh>(null);
 	const opacitySetRef = useRef(false);
@@ -83,8 +85,9 @@ export function RegionLabel({
 		e.stopPropagation();
 		if (onClick) {
 			onClick(region);
+			mapControl?.getConfig().events?.onRegionClick?.(region);
 		}
-	}, [onClick, region]);
+	}, [onClick, region, mapControl]);
 
 	return (
 		<Text

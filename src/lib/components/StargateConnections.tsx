@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import type { SolarSystem } from '../../types';
+import type { SolarSystem } from '../types';
 
 export function StargateConnections({
 	connections,

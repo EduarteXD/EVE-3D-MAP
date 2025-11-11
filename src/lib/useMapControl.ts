@@ -1,6 +1,5 @@
-import { useRef, useCallback } from 'react';
-import type { MapControl } from './types';
-import type { SolarSystem } from './types';
+import { useRef, useCallback, useState, useMemo } from 'react';
+import type { MapControl, MapControlConfig, SolarSystem } from './types';
 
 interface OrbitControlsRef {
   target: { x: number; y: number; z: number; set: (x: number, y: number, z: number) => void };
@@ -14,16 +13,25 @@ interface OrbitControlsRef {
  * 地图控制 Hook
  * 用于生成 mapControl 对象，传入 EveMap3D 组件来控制地图
  * 
+ * @param initialConfig 初始配置
  * @returns MapControl 对象，包含控制地图的方法
  * 
  * @example
  * ```tsx
  * function App() {
- *   const mapControl = useMapControl();
+ *   const mapControl = useMapControl({
+ *     systems: systemsData,
+ *     stargates: stargatesData,
+ *     regions: regionsData,
+ *     language: 'zh',
+ *   });
  *   
- *   return (
- *     <EveMap3D mapControl={mapControl} />
- *   );
+ *   // 后续可以动态更新配置
+ *   useEffect(() => {
+ *     mapControl.setConfig({ language: 'en' });
+ *   }, []);
+ *   
+ *   return <EveMap3D mapControl={mapControl} />;
  * }
  * ```
  */
@@ -32,12 +40,52 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-export function useMapControl(): MapControl {
+export function useMapControl(initialConfig?: Partial<MapControlConfig>): MapControl {
   const controlsRef = useRef<OrbitControlsRef | null>(null);
   const systemsRef = useRef<SolarSystem[]>([]);
   const initialCameraPositionRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const initialCameraTargetRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  
+  // 版本号，用于追踪状态变化
+  const versionRef = useRef(0);
+  
+  // 配置状态（不包括静态数据）
+  const [config, setConfigState] = useState<MapControlConfig>({
+    language: initialConfig?.language || 'zh',
+    systemRenderConfigs: initialConfig?.systemRenderConfigs,
+    securityColors: initialConfig?.securityColors,
+    style: initialConfig?.style,
+    filterNewEdenOnly: initialConfig?.filterNewEdenOnly !== false,
+    systemFilter: initialConfig?.systemFilter,
+    containerStyle: initialConfig?.containerStyle,
+    containerClassName: initialConfig?.containerClassName,
+    jumpDriveConfig: initialConfig?.jumpDriveConfig,
+    events: initialConfig?.events,
+  });
+  
+  // 状态管理
+  const [selectedSystemId, setSelectedSystemId] = useState<number | null>(null);
+  const [highlightedRegionId, setHighlightedRegionIdState] = useState<number | null>(null);
+  const [highlightedSystemIds, setHighlightedSystemIdsState] = useState<number[]>([]);
+  
+  // 订阅者列表，用于通知组件更新
+  const subscribersRef = useRef<Set<() => void>>(new Set());
+
+  // 通知所有订阅者
+  const notifySubscribers = useCallback(() => {
+    versionRef.current += 1;
+    subscribersRef.current.forEach(callback => callback());
+  }, []);
+
+  // 设置配置
+  const setConfig = useCallback((newConfig: Partial<MapControlConfig>) => {
+    setConfigState(prev => ({ ...prev, ...newConfig }));
+    notifySubscribers();
+  }, [notifySubscribers]);
+
+  // 获取配置
+  const getConfig = useCallback(() => config, [config]);
 
   // 内部方法：设置 controls 引用（由 EveMap3D 组件调用）
   const setControlsRef = useCallback((ref: unknown) => {
@@ -53,6 +101,19 @@ export function useMapControl(): MapControl {
   const setInitialCameraPosition = useCallback((position: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }) => {
     initialCameraPositionRef.current = position;
     initialCameraTargetRef.current = target;
+  }, []);
+
+  // 内部方法：订阅状态变化
+  const subscribe = useCallback((callback: () => void) => {
+    subscribersRef.current.add(callback);
+    return () => {
+      subscribersRef.current.delete(callback);
+    };
+  }, []);
+
+  // 内部方法：获取当前版本号
+  const getVersion = useCallback(() => {
+    return versionRef.current;
   }, []);
 
   // 重置相机到初始位置
@@ -130,7 +191,7 @@ export function useMapControl(): MapControl {
   }, []);
 
   // 聚焦到指定系统（聚焦到星系本身，但距离由所在星域计算）
-  const focusSystem = useCallback((systemId: number) => {
+  const focusSystem = useCallback((systemId: number, animationDuration = 1500) => {
     if (!controlsRef.current) return;
 
     const system = systemsRef.current.find(s => s._key === systemId);
@@ -163,14 +224,38 @@ export function useMapControl(): MapControl {
       }
     });
 
-    const cameraDistance = Math.max(maxDistance * 1.5, 7e16);
+    const cameraDistance = Math.max(maxDistance * 2.5, 7e16);
 
     // 目标位置：聚焦到星系本身的位置
     const targetCenter = { x: -system.position.x, y: -system.position.y, z: system.position.z };
+    
+    // 计算当前相机在水平面上的方向（忽略y分量）
+    const currentCameraPos = controlsRef.current.object.position;
+    const horizontalDirX = currentCameraPos.x - targetCenter.x;
+    const horizontalDirZ = currentCameraPos.z - targetCenter.z;
+    const horizontalLength = Math.sqrt(horizontalDirX * horizontalDirX + horizontalDirZ * horizontalDirZ);
+    
+    // 如果相机在目标点正上方或正下方，使用默认水平方向
+    let normalizedHorizontalDirX, normalizedHorizontalDirZ;
+    if (horizontalLength < 1e10) {
+      normalizedHorizontalDirX = 0;
+      normalizedHorizontalDirZ = 1;
+    } else {
+      normalizedHorizontalDirX = horizontalDirX / horizontalLength;
+      normalizedHorizontalDirZ = horizontalDirZ / horizontalLength;
+    }
+    
+    // 40度俯角：计算相机位置
+    // 垂直距离和水平距离的比例关系
+    const angleInRadians = (40 * Math.PI) / 180;
+    const verticalDistance = cameraDistance * Math.sin(angleInRadians);
+    const horizontalDistance = cameraDistance * Math.cos(angleInRadians);
+    
+    // 根据水平方向和40度俯角设置相机位置
     const targetPosition = {
-      x: -system.position.x,
-      y: -system.position.y + cameraDistance * 0.5,
-      z: system.position.z + cameraDistance * 0.8
+      x: targetCenter.x + normalizedHorizontalDirX * horizontalDistance,
+      y: targetCenter.y + verticalDistance,
+      z: targetCenter.z + normalizedHorizontalDirZ * horizontalDistance
     };
 
     // 起始位置
@@ -191,7 +276,7 @@ export function useMapControl(): MapControl {
     }
 
     // 动画参数
-    const duration = 1500; // 动画时长（毫秒）
+    const duration = animationDuration;
     const startTime = performance.now();
 
     // 动画函数
@@ -230,7 +315,7 @@ export function useMapControl(): MapControl {
   }, []);
 
   // 聚焦到指定星域
-  const focusRegion = useCallback((regionId: number) => {
+  const focusRegion = useCallback((regionId: number, animationDuration = 1500) => {
     if (!controlsRef.current) return;
 
     const regionSystems = systemsRef.current.filter(s => s.regionID === regionId);
@@ -259,14 +344,38 @@ export function useMapControl(): MapControl {
       }
     });
 
-    const cameraDistance = Math.max(maxDistance * 1.5, 7e16);
+    const cameraDistance = Math.max(maxDistance * 2.5, 7e16);
 
     // 目标位置
     const targetCenter = { x: centerX, y: centerY, z: centerZ };
+    
+    // 计算当前相机在水平面上的方向（忽略y分量）
+    const currentCameraPos = controlsRef.current.object.position;
+    const horizontalDirX = currentCameraPos.x - targetCenter.x;
+    const horizontalDirZ = currentCameraPos.z - targetCenter.z;
+    const horizontalLength = Math.sqrt(horizontalDirX * horizontalDirX + horizontalDirZ * horizontalDirZ);
+    
+    // 如果相机在目标点正上方或正下方，使用默认水平方向
+    let normalizedHorizontalDirX, normalizedHorizontalDirZ;
+    if (horizontalLength < 1e10) {
+      normalizedHorizontalDirX = 0;
+      normalizedHorizontalDirZ = 1;
+    } else {
+      normalizedHorizontalDirX = horizontalDirX / horizontalLength;
+      normalizedHorizontalDirZ = horizontalDirZ / horizontalLength;
+    }
+    
+    // 40度俯角：计算相机位置
+    // 垂直距离和水平距离的比例关系
+    const angleInRadians = (40 * Math.PI) / 180;
+    const verticalDistance = cameraDistance * Math.sin(angleInRadians);
+    const horizontalDistance = cameraDistance * Math.cos(angleInRadians);
+    
+    // 根据水平方向和40度俯角设置相机位置
     const targetPosition = {
-      x: centerX,
-      y: centerY + cameraDistance * 0.5,
-      z: centerZ + cameraDistance * 0.8
+      x: targetCenter.x + normalizedHorizontalDirX * horizontalDistance,
+      y: targetCenter.y + verticalDistance,
+      z: targetCenter.z + normalizedHorizontalDirZ * horizontalDistance
     };
 
     // 起始位置
@@ -287,7 +396,7 @@ export function useMapControl(): MapControl {
     }
 
     // 动画参数
-    const duration = 1500; // 动画时长（毫秒）
+    const duration = animationDuration;
     const startTime = performance.now();
 
     // 动画函数
@@ -353,8 +462,68 @@ export function useMapControl(): MapControl {
     return { x: target.x, y: target.y, z: target.z };
   }, []);
 
-  // 创建 mapControl 对象
-  const mapControl: MapControl = {
+  // 选择星系（会自动聚焦和高亮）
+  const selectSystem = useCallback((systemId: number | null) => {
+    setSelectedSystemId(systemId);
+    
+    if (systemId !== null) {
+      // 高亮选中的星系
+      setHighlightedSystemIdsState([systemId]);
+      
+      // 自动聚焦到选中的星系
+      focusSystem(systemId);
+      
+      // 高亮该星系所在的星域
+      const system = systemsRef.current.find(s => s._key === systemId);
+      if (system) {
+        setHighlightedRegionIdState(system.regionID);
+      }
+    } else {
+      // 清除高亮
+      setHighlightedSystemIdsState([]);
+    }
+    
+    notifySubscribers();
+  }, [focusSystem, notifySubscribers]);
+
+  // 获取当前选中的星系ID
+  const getSelectedSystemId = useCallback(() => selectedSystemId, [selectedSystemId]);
+
+  // 高亮星域（会自动移动摄像机）
+  const highlightRegion = useCallback((regionId: number | null) => {
+    setHighlightedRegionIdState(regionId);
+    
+    if (regionId !== null) {
+      // 清除选中的星系
+      setSelectedSystemId(null);
+      setHighlightedSystemIdsState([]);
+      
+      // 自动聚焦到星域
+      focusRegion(regionId);
+    }
+    
+    notifySubscribers();
+  }, [focusRegion, notifySubscribers]);
+
+  // 获取当前高亮的星域ID
+  const getHighlightedRegionId = useCallback(() => highlightedRegionId, [highlightedRegionId]);
+
+  // 高亮星系（不会自动移动摄像机）
+  const highlightSystems = useCallback((systemIds: number[]) => {
+    setHighlightedSystemIdsState(systemIds);
+    notifySubscribers();
+  }, [notifySubscribers]);
+
+  // 获取当前高亮的星系ID列表
+  const getHighlightedSystemIds = useCallback(() => highlightedSystemIds, [highlightedSystemIds]);
+
+  // 创建 mapControl 对象（使用 useMemo 确保引用稳定）
+  const mapControl = useMemo<MapControl>(() => ({
+    // 配置方法
+    setConfig,
+    getConfig,
+    
+    // 相机控制方法
     resetCamera,
     focusSystem,
     focusRegion,
@@ -362,13 +531,44 @@ export function useMapControl(): MapControl {
     setCameraTarget,
     getCameraPosition,
     getCameraTarget,
+    
+    // 状态控制方法
+    selectSystem,
+    getSelectedSystemId,
+    highlightRegion,
+    getHighlightedRegionId,
+    highlightSystems,
+    getHighlightedSystemIds,
+    
     __internal: {
       setControlsRef,
       setSystems,
       setInitialCameraPosition,
+      subscribe,
+      getVersion,
     },
-  };
+  }), [
+    setConfig,
+    getConfig,
+    resetCamera,
+    focusSystem,
+    focusRegion,
+    setCameraPosition,
+    setCameraTarget,
+    getCameraPosition,
+    getCameraTarget,
+    selectSystem,
+    getSelectedSystemId,
+    highlightRegion,
+    getHighlightedRegionId,
+    highlightSystems,
+    getHighlightedSystemIds,
+    setControlsRef,
+    setSystems,
+    setInitialCameraPosition,
+    subscribe,
+    getVersion,
+  ]);
 
   return mapControl;
 }
-

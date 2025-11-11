@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Html } from '@react-three/drei';
 import { Home } from 'lucide-react';
-import type { SolarSystem } from '../../types';
+import type { SolarSystem } from '../types';
 
 export function HomeIcon({ 
 	system, 

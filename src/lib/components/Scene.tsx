@@ -3,8 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type {
-	EveMap3DProps,
-	FocusConfig,
+	CustomStyleConfig,
 	JumpDriveConfig,
 	Jumpgate,
 	Language,
@@ -14,8 +13,8 @@ import type {
 	SolarSystem,
 	Stargate,
 	SystemRenderConfig,
-} from '../../types';
-import { isNewEdenSystem } from '../../utils';
+} from '../types';
+import { isNewEdenSystem } from '../utils';
 import { JUMP_DRIVE_LIGHTYEAR_IN_METERS } from './constants';
 import { JumpDriveBubble } from './JumpDriveBubble';
 import { JumpgateConnections } from './JumpgateConnections';
@@ -26,6 +25,7 @@ import { SolarSystemLabel } from './SolarSystemLabel';
 import { RegionLabel } from './RegionLabel';
 import { Compass2DInternal } from './Compass2D';
 import { HomeIcon } from './HomeIcon';
+import { detectLabelVisibility, type ProjectedLabel } from './utils/labelOverlapDetection';
 
 export function Scene({
 	systems,
@@ -41,12 +41,9 @@ export function Scene({
 	securityColors,
 	language,
 	style,
-	focus,
-	onFocusComplete,
 	filterNewEdenOnly,
 	systemFilter,
 	mapControl,
-	externalHighlightedRegionId,
 	jumpDriveConfig,
 	onCompassRotationChange,
 }: {
@@ -62,13 +59,10 @@ export function Scene({
 	systemRenderConfigs?: SystemRenderConfig[];
 	securityColors?: SecurityColorConfig;
 	language: Language;
-	style?: EveMap3DProps['style'];
-	focus?: FocusConfig;
-	onFocusComplete?: (config: FocusConfig) => void;
+	style?: CustomStyleConfig;
 	filterNewEdenOnly?: boolean;
 	systemFilter?: (system: SolarSystem) => boolean;
 	mapControl?: MapControl;
-	externalHighlightedRegionId?: number | null;
 	jumpDriveConfig?: JumpDriveConfig;
 	onCompassRotationChange?: (rotation: number) => void;
 }) {
@@ -78,7 +72,6 @@ export function Scene({
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const controlsRef = useRef<any>(null);
 	const cameraInitializedRef = useRef(false);
-	const lastHighlightedRegionIdRef = useRef<number | null>(null);
 	const { scene, camera } = useThree();
 
 	useEffect(() => {
@@ -227,10 +220,12 @@ export function Scene({
 		setJumpgateConnections(newConnections);
 	}, [filteredSystems, jumpgates, systemMap]);
 
+	// 初始化相机位置（只在没有高亮星域时执行）
 	useEffect(() => {
 		if (filteredSystems.length === 0 || !controlsRef.current) return;
 		if (cameraInitializedRef.current) return;
-		if (highlightedRegionId !== null || focus) return;
+		if (highlightedRegionId !== null) return;
+		
 		const box = new THREE.Box3();
 		filteredSystems.forEach((system) => {
 			const pos = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
@@ -249,149 +244,180 @@ export function Scene({
 		if (mapControl?.__internal?.setInitialCameraPosition) {
 			mapControl.__internal.setInitialCameraPosition({ x: initialPosition.x, y: initialPosition.y, z: initialPosition.z }, { x: center.x, y: center.y, z: center.z });
 		}
-	}, [filteredSystems, highlightedRegionId, focus, mapControl]);
-
-	useEffect(() => {
-		if (externalHighlightedRegionId === undefined) {
-			return;
-		}
-		if (externalHighlightedRegionId === null || !controlsRef.current || filteredSystems.length === 0) {
-			lastHighlightedRegionIdRef.current = externalHighlightedRegionId;
-			return;
-		}
-		if (lastHighlightedRegionIdRef.current === externalHighlightedRegionId) return;
-		lastHighlightedRegionIdRef.current = externalHighlightedRegionId;
-		const regionSystems = filteredSystems.filter((system) => system.regionID === externalHighlightedRegionId);
-		if (regionSystems.length === 0) return;
-		const box = new THREE.Box3();
-		regionSystems.forEach((system) => {
-			const pos = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
-			box.expandByPoint(pos);
-		});
-		const targetCenter = new THREE.Vector3();
-		box.getCenter(targetCenter);
-		const boxSize = box.getSize(new THREE.Vector3());
-		const maxSize = Math.max(boxSize.x, boxSize.y, boxSize.z);
-		const cameraDistance = maxSize * 1.5;
-		const targetPosition = new THREE.Vector3(targetCenter.x, targetCenter.y + cameraDistance * 0.5, targetCenter.z - cameraDistance * 0.8);
-		const startTarget = controlsRef.current.target.clone();
-		const startPosition = camera.position.clone();
-		const duration = 1500;
-		const startTime = Date.now();
-		let animationFrameId: number;
-		const easeInOutCubic = (t: number): number => {
-			return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-		};
-		const animate = () => {
-			const elapsed = Date.now() - startTime;
-			const progress = Math.min(elapsed / duration, 1);
-			const easedProgress = easeInOutCubic(progress);
-			const currentTarget = startTarget.clone().lerp(targetCenter, easedProgress);
-			const currentPosition = startPosition.clone().lerp(targetPosition, easedProgress);
-			controlsRef.current.target.copy(currentTarget);
-			camera.position.copy(currentPosition);
-			controlsRef.current.update();
-			if (progress < 1) {
-				animationFrameId = requestAnimationFrame(animate);
-			}
-		};
-		animate();
-		return () => {
-			if (animationFrameId) {
-				cancelAnimationFrame(animationFrameId);
-			}
-		};
-	}, [externalHighlightedRegionId, filteredSystems, camera]);
-
-	useEffect(() => {
-		if (!focus || !controlsRef.current || filteredSystems.length === 0) return;
-		let targetSystems: SolarSystem[] = [];
-		if (focus.type === 'system') {
-			const system = filteredSystems.find((s) => s._key === focus.targetId);
-			if (system) targetSystems = [system];
-		} else if (focus.type === 'region') {
-			targetSystems = filteredSystems.filter((s) => s.regionID === focus.targetId);
-		}
-		if (targetSystems.length === 0) return;
-		const box = new THREE.Box3();
-		targetSystems.forEach((system) => {
-			const pos = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
-			box.expandByPoint(pos);
-		});
-		const targetCenter = new THREE.Vector3();
-		box.getCenter(targetCenter);
-		const boxSize = box.getSize(new THREE.Vector3());
-		const maxSize = Math.max(boxSize.x, boxSize.y, boxSize.z);
-		const cameraDistance = maxSize * 1.5;
-		const targetPosition = new THREE.Vector3(targetCenter.x, targetCenter.y + cameraDistance * 0.5, targetCenter.z - cameraDistance * 0.8);
-		const startTarget = controlsRef.current.target.clone();
-		const startPosition = camera.position.clone();
-		const duration = focus.animationDuration || 1500;
-		const startTime = Date.now();
-		let animationFrameId: number;
-		const easeInOutCubic = (t: number): number => {
-			return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-		};
-		const animate = () => {
-			const elapsed = Date.now() - startTime;
-			const progress = Math.min(elapsed / duration, 1);
-			const easedProgress = easeInOutCubic(progress);
-			const currentTarget = startTarget.clone().lerp(targetCenter, easedProgress);
-			const currentPosition = startPosition.clone().lerp(targetPosition, easedProgress);
-			controlsRef.current.target.copy(currentTarget);
-			camera.position.copy(currentPosition);
-			controlsRef.current.update();
-			if (progress < 1) {
-				animationFrameId = requestAnimationFrame(animate);
-			} else if (onFocusComplete) {
-				onFocusComplete(focus);
-			}
-		};
-		animate();
-		return () => {
-			if (animationFrameId) {
-				cancelAnimationFrame(animationFrameId);
-			}
-		};
-	}, [focus, filteredSystems, camera, onFocusComplete]);
+	}, [filteredSystems, highlightedRegionId, mapControl]);
 
 	const [visibleRegionIds, setVisibleRegionIds] = useState<Set<number>>(new Set());
+	const [visibleSystemIds, setVisibleSystemIds] = useState<Set<number>>(new Set());
+	
+	const frameCounterRef = useRef(0);
+	const STABILITY_THRESHOLD = 15;
+
+	const systemsByRegion = useMemo(() => {
+		const map = new Map<number, SolarSystem[]>();
+		filteredSystems.forEach((system) => {
+			const regionSystems = map.get(system.regionID) || [];
+			regionSystems.push(system);
+			map.set(system.regionID, regionSystems);
+		});
+		return map;
+	}, [filteredSystems]);
 
 	useFrame(() => {
-		if (!regions || regions.length === 0) return;
-		const projected: { id: number; screenPos: THREE.Vector3; dist: number }[] = [];
+		frameCounterRef.current++;
+		const shouldUpdate = frameCounterRef.current % STABILITY_THRESHOLD === 0;
+		
+		if (!shouldUpdate) {
+			return;
+		}
+		
+		updateRegionLabels();
+		updateSystemLabels();
+	});
 
-		regions.forEach((region) => {
-			const regionSystems = filteredSystems.filter((s) => s.regionID === region._key);
-			if (regionSystems.length === 0) return;
+	// 区域标签更新逻辑
+	function updateRegionLabels() {
+		// 没有区域数据，清空可见集合
+		if (!regions || regions.length === 0) {
+			if (visibleRegionIds.size > 0) {
+				setVisibleRegionIds(new Set());
+			}
+			return;
+		}
+
+		const projected: ProjectedLabel[] = [];
+		const baseFontSize = (style?.labelFontSize || 2e15) * 1.5;
+		const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180);
+		const avgCharWidth = language === 'zh' ? 1.0 : 0.6;
+
+		// 投影所有区域标签
+		for (const region of regions) {
+			const regionSystems = systemsByRegion.get(region._key);
+			if (!regionSystems || regionSystems.length === 0) continue;
+			
+			// 计算区域中心
 			const center = new THREE.Vector3();
-			regionSystems.forEach((s) =>
-				center.add(new THREE.Vector3(-s.position.x, -s.position.y, s.position.z))
-			);
+			for (const s of regionSystems) {
+				center.add(new THREE.Vector3(-s.position.x, -s.position.y, s.position.z));
+			}
 			center.divideScalar(regionSystems.length);
 
 			const projectedPos = center.clone().project(camera);
+			const dist = camera.position.distanceTo(center);
+			
+			// 视野裁剪
+			if (projectedPos.z > 1 || projectedPos.z < -1 || 
+			    Math.abs(projectedPos.x) > 1.2 || Math.abs(projectedPos.y) > 1.2) {
+				continue;
+			}
+			
+			// 计算屏幕空间尺寸
+			const isHighlighted = highlightedRegionId === region._key;
+			const scale = dist / (isHighlighted ? 1e17 : 2e17);
+			const regionName = language === 'zh' ? region.name.zh || region.name.en : region.name.en || region.name.zh;
+			const textLength = regionName?.length || 10;
+			
+			const worldSize = baseFontSize * scale;
+			const screenHeightFactor = 2 * Math.tan(fov / 2) * dist;
+			const screenSpaceSize = worldSize / screenHeightFactor;
+			
+			const screenWidth = screenSpaceSize * textLength * avgCharWidth * 1.2;
+			const screenHeight = screenSpaceSize * 1.5;
+			
 			projected.push({
 				id: region._key,
 				screenPos: projectedPos,
-				dist: camera.position.distanceTo(center),
+				dist,
+				screenWidth,
+				screenHeight,
 			});
-		});
+		}
 
-		const visible = new Set<number>();
-		const threshold = 0.04;
-		projected.forEach((a) => {
-			const overlapped = projected.some(
-				(b) =>
-					a !== b &&
-					Math.abs(a.screenPos.x - b.screenPos.x) < threshold &&
-					Math.abs(a.screenPos.y - b.screenPos.y) < threshold &&
-					b.dist < a.dist
-			);
-			if (!overlapped) visible.add(a.id);
+		// 使用优化的可见性检测并直接更新
+		const newVisibleSet = detectLabelVisibility(projected, (a, b) => a.dist - b.dist);
+		setVisibleRegionIds(newVisibleSet);
+	}
+
+	// 星系标签更新逻辑
+	function updateSystemLabels() {
+		// 使用预计算的映射替代 filter
+		const systemsToLabel = highlightedRegionId !== null
+			? (systemsByRegion.get(highlightedRegionId) || [])
+			: highlightedSystemIds.size > 0
+			? filteredSystems.filter((system) => highlightedSystemIds.has(system._key))
+			: [];
+		
+		// 没有需要标记的星系，清空可见集合
+		if (systemsToLabel.length === 0) {
+			if (visibleSystemIds.size > 0) {
+				setVisibleSystemIds(new Set());
+			}
+			return;
+		}
+
+		// 扩展 ProjectedLabel 接口以包含星系特有的属性
+		interface ProjectedSystemLabel extends ProjectedLabel {
+			isHighlightedRegion: boolean;
+		}
+		
+		const projectedSystems: ProjectedSystemLabel[] = [];
+		const baseFontSize = style?.labelFontSize || 1e15;
+		const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180);
+		const avgCharWidth = language === 'zh' ? 1.0 : 0.6;
+		const maxGrayLabelDistance = 4e17;
+		
+		// 投影所有星系标签
+		for (const system of systemsToLabel) {
+			const systemPosition = new THREE.Vector3(-system.position.x, -system.position.y, system.position.z);
+			const dist = camera.position.distanceTo(systemPosition);
+			
+			const isHighlightedRegion = highlightedRegionId !== null && !highlightedSystemIds.has(system._key);
+			
+			// 距离裁剪
+			if (isHighlightedRegion && dist > maxGrayLabelDistance) {
+				continue;
+			}
+			
+			const projectedPos = systemPosition.clone().project(camera);
+			
+			// 视野裁剪
+			if (projectedPos.z > 1 || projectedPos.z < -1 || 
+				Math.abs(projectedPos.x) > 1.2 || Math.abs(projectedPos.y) > 1.2) {
+				continue;
+			}
+			
+			// 计算屏幕空间尺寸
+			const scale = dist / 5e16 * (isHighlightedRegion ? 0.9 : 1.3);
+			const systemName = language === 'zh' ? system.name.zh || system.name.en : system.name.en || system.name.zh;
+			const nameLength = systemName?.length || 10;
+			const textLength = nameLength + 4; // +4 for security status " 0.0"
+			
+			const fontSize = isHighlightedRegion ? baseFontSize * 0.7 : baseFontSize;
+			const worldSize = fontSize * scale;
+			const screenHeightFactor = 2 * Math.tan(fov / 2) * dist;
+			const screenSpaceSize = worldSize / screenHeightFactor;
+			
+			const screenWidth = screenSpaceSize * textLength * avgCharWidth * 1.3;
+			const screenHeight = screenSpaceSize * 1.5;
+			
+			projectedSystems.push({
+				id: system._key,
+				screenPos: projectedPos,
+				dist,
+				screenWidth,
+				screenHeight,
+				isHighlightedRegion,
+			});
+		}
+		
+		// 使用优化的可见性检测并直接更新（自定义排序：非高亮优先，然后按距离）
+		const newVisibleSet = detectLabelVisibility(projectedSystems, (a, b) => {
+			if (a.isHighlightedRegion !== b.isHighlightedRegion) {
+				return a.isHighlightedRegion ? 1 : -1;
+			}
+			return a.dist - b.dist;
 		});
-		setVisibleRegionIds(visible);
-	});
+		setVisibleSystemIds(newVisibleSet);
+	}
 
 	return (
 		<>
@@ -416,6 +442,7 @@ export function Scene({
 					securityColors={securityColors}
 					jumpDriveHighlight={jumpDriveHighlightData}
 					jumpDriveConfig={jumpDriveConfig}
+					mapControl={mapControl}
 				/>
 			)}
 			{selectedSystemId !== null &&
@@ -434,22 +461,29 @@ export function Scene({
 				filteredSystems
 					.filter((system) => system.regionID === highlightedRegionId)
 					.map((system) => (
-						<SolarSystemLabel key={system._key} system={system} language={language} style={style} isHighlightedRegion={!highlightedSystemIds.has(system._key)} />
+						<SolarSystemLabel 
+							key={system._key} 
+							system={system} 
+							language={language} 
+							style={style} 
+							isHighlightedRegion={!highlightedSystemIds.has(system._key)}
+							visible={visibleSystemIds.has(system._key)}
+						/>
 					))}
 			{highlightedRegionId === null &&
 				highlightedSystemIds.size > 0 &&
 				filteredSystems
 					.filter((system) => highlightedSystemIds.has(system._key))
-					.map((system) => <SolarSystemLabel key={system._key} system={system} language={language} style={style} isHighlightedRegion={false} />)}
-			{/* {regions &&
-				regions.length > 0 &&
-				regions
-					.filter((region) => {
-						return filteredSystems.some((system) => system.regionID === region._key);
-					})
-					.map((region) => (
-						<RegionLabel key={region._key} region={region} systems={filteredSystems} language={language} style={style} isHighlighted={highlightedRegionId === region._key} onClick={onRegionClick} />
-					))} */}
+					.map((system) => (
+						<SolarSystemLabel 
+							key={system._key} 
+							system={system} 
+							language={language} 
+							style={style} 
+							isHighlightedRegion={false}
+							visible={visibleSystemIds.has(system._key)}
+						/>
+					))}
 			{regions &&
 				regions.length > 0 &&
 				regions
@@ -464,6 +498,7 @@ export function Scene({
 							isHighlighted={highlightedRegionId === region._key}
 							visible={visibleRegionIds.has(region._key)}
 							onClick={onRegionClick}
+							mapControl={mapControl}
 						/>
 					))}
 			<OrbitControls ref={controlsRef} enablePan={true} enableZoom={true} enableRotate={true} minDistance={7e16} maxDistance={1e18} autoRotate={false} zoomSpeed={-1} />
@@ -471,5 +506,4 @@ export function Scene({
 		</>
 	);
 }
-
 

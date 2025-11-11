@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { JumpDriveConfig, SecurityColorConfig, SolarSystem, SystemRenderConfig } from '../../types';
+import type { JumpDriveConfig, MapControl, SecurityColorConfig, SolarSystem, SystemRenderConfig } from '../types';
 import { DEFAULT_HIGHLIGHT_COLORS, DEFAULT_SECURITY_COLORS, SYSTEM_POINT_SIZE } from './constants';
-import { clampSystemPointBaseScale } from './utils';
+import { clampSystemPointBaseScale } from './utils/utils';
 import { JumpDriveReachableRing } from './JumpDriveReachableRing';
 
 export function SolarSystemPoints({
@@ -15,6 +15,7 @@ export function SolarSystemPoints({
 	securityColors,
 	jumpDriveHighlight,
 	jumpDriveConfig,
+	mapControl,
 }: {
 	systems: SolarSystem[];
 	onSystemClick: (system: SolarSystem) => void;
@@ -29,6 +30,7 @@ export function SolarSystemPoints({
 		opacity: number;
 	};
 	jumpDriveConfig?: JumpDriveConfig;
+	mapControl?: MapControl;
 }) {
 	const highsecNormalRef = useRef<THREE.InstancedMesh>(null);
 	const highsecHighlightRef = useRef<THREE.InstancedMesh>(null);
@@ -291,6 +293,7 @@ export function SolarSystemPoints({
 						const instanceId = intersects[0].instanceId!;
 						if (instanceId < groupSystems.length) {
 							onSystemClick(groupSystems[instanceId]);
+							mapControl?.getConfig().events?.onSystemClick?.(groupSystems[instanceId]);
 							return;
 						}
 					}
@@ -302,33 +305,33 @@ export function SolarSystemPoints({
 		return () => {
 			gl.domElement.removeEventListener('click', handleClick);
 		};
-	}, [gl, camera, raycaster, mouse, systemGroups, customSystemGroups, onSystemClick]);
+	}, [gl, camera, raycaster, mouse, systemGroups, customSystemGroups, onSystemClick, mapControl]);
 
 	return (
 		<>
 			{systemGroups.highsec.normal.length > 0 && (
-				<instancedMesh ref={highsecNormalRef} args={[normalGeometry, materials.baseMaterials.highsec, systemGroups.highsec.normal.length]} />
+				<instancedMesh key={`highsec-normal-${systemGroups.highsec.normal.length}`} ref={highsecNormalRef} args={[normalGeometry, materials.baseMaterials.highsec, systemGroups.highsec.normal.length]} />
 			)}
 			{systemGroups.highsec.highlighted.length > 0 && (
-				<instancedMesh ref={highsecHighlightRef} args={[highlightGeometry, materials.highlightMaterials.highsec, systemGroups.highsec.highlighted.length]} />
+				<instancedMesh key={`highsec-highlighted-${systemGroups.highsec.highlighted.length}`} ref={highsecHighlightRef} args={[highlightGeometry, materials.highlightMaterials.highsec, systemGroups.highsec.highlighted.length]} />
 			)}
 			{systemGroups.lowsec.normal.length > 0 && (
-				<instancedMesh ref={lowsecNormalRef} args={[normalGeometry, materials.baseMaterials.lowsec, systemGroups.lowsec.normal.length]} />
+				<instancedMesh key={`lowsec-normal-${systemGroups.lowsec.normal.length}`} ref={lowsecNormalRef} args={[normalGeometry, materials.baseMaterials.lowsec, systemGroups.lowsec.normal.length]} />
 			)}
 			{systemGroups.lowsec.highlighted.length > 0 && (
-				<instancedMesh ref={lowsecHighlightRef} args={[highlightGeometry, materials.highlightMaterials.lowsec, systemGroups.lowsec.highlighted.length]} />
+				<instancedMesh key={`lowsec-highlighted-${systemGroups.lowsec.highlighted.length}`} ref={lowsecHighlightRef} args={[highlightGeometry, materials.highlightMaterials.lowsec, systemGroups.lowsec.highlighted.length]} />
 			)}
 			{systemGroups.nullsec.normal.length > 0 && (
-				<instancedMesh ref={nullsecNormalRef} args={[normalGeometry, materials.baseMaterials.nullsec, systemGroups.nullsec.normal.length]} />
+				<instancedMesh key={`nullsec-normal-${systemGroups.nullsec.normal.length}`} ref={nullsecNormalRef} args={[normalGeometry, materials.baseMaterials.nullsec, systemGroups.nullsec.normal.length]} />
 			)}
 			{systemGroups.nullsec.highlighted.length > 0 && (
-				<instancedMesh ref={nullsecHighlightRef} args={[highlightGeometry, materials.highlightMaterials.nullsec, systemGroups.nullsec.highlighted.length]} />
+				<instancedMesh key={`nullsec-highlighted-${systemGroups.nullsec.highlighted.length}`} ref={nullsecHighlightRef} args={[highlightGeometry, materials.highlightMaterials.nullsec, systemGroups.nullsec.highlighted.length]} />
 			)}
 			{Array.from(customSystemGroups.entries()).map(([key, items]) => {
 				const { material, geometry } = customMaterialsAndGeometries.get(key)!;
 				return (
 					<instancedMesh
-						key={key}
+						key={`${key}-${items.length}`}
 						ref={(ref) => {
 							if (ref) {
 								customSystemsRefs.current.set(key, ref);

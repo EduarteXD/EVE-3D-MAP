@@ -147,28 +147,78 @@ export interface CustomStyleConfig {
 }
 
 /**
+ * 地图控制配置
+ */
+export interface MapControlConfig {
+  /** 语言设置 (默认 'zh') */
+  language?: Language;
+  /** 星系渲染配置数组（可选，不传入则按安全等级渲染） */
+  systemRenderConfigs?: SystemRenderConfig[];
+  /** 安全等级颜色配置（可选，用于覆盖默认颜色） */
+  securityColors?: SecurityColorConfig;
+  /** 自定义样式 */
+  style?: CustomStyleConfig;
+  /** 是否只显示New Eden星系（默认 true） */
+  filterNewEdenOnly?: boolean;
+  /** 自定义过滤函数 */
+  systemFilter?: (system: SolarSystem) => boolean;
+  /** 容器样式 */
+  containerStyle?: React.CSSProperties;
+  /** 容器类名 */
+  containerClassName?: string;
+  /** 跳跃引擎配置 */
+  jumpDriveConfig?: JumpDriveConfig;
+  /** 事件回调 */
+  events?: EveMap3DEvents;
+}
+
+/**
  * 地图控制接口
  */
 export interface MapControl {
+  // ============ 配置方法 ============
+  /** 设置地图配置 */
+  setConfig: (config: Partial<MapControlConfig>) => void;
+  /** 获取当前配置 */
+  getConfig: () => MapControlConfig;
+  
+  // ============ 相机控制方法 ============
   /** 重置相机到初始位置 */
-  resetCamera?: () => void;
-  /** 聚焦到指定系统 */
-  focusSystem?: (systemId: number) => void;
-  /** 聚焦到指定星域 */
-  focusRegion?: (regionId: number) => void;
+  resetCamera: () => void;
+  /** 聚焦到指定系统（会自动移动摄像机） */
+  focusSystem: (systemId: number, animationDuration?: number) => void;
+  /** 聚焦到指定星域（会自动移动摄像机） */
+  focusRegion: (regionId: number, animationDuration?: number) => void;
   /** 设置相机位置 */
-  setCameraPosition?: (x: number, y: number, z: number) => void;
+  setCameraPosition: (x: number, y: number, z: number) => void;
   /** 设置相机目标 */
-  setCameraTarget?: (x: number, y: number, z: number) => void;
+  setCameraTarget: (x: number, y: number, z: number) => void;
   /** 获取相机位置 */
-  getCameraPosition?: () => { x: number; y: number; z: number } | null;
+  getCameraPosition: () => { x: number; y: number; z: number } | null;
   /** 获取相机目标 */
-  getCameraTarget?: () => { x: number; y: number; z: number } | null;
+  getCameraTarget: () => { x: number; y: number; z: number } | null;
+  
+  // ============ 状态控制方法 ============
+  /** 选择星系（会自动聚焦和高亮） */
+  selectSystem: (systemId: number | null) => void;
+  /** 获取当前选中的星系ID */
+  getSelectedSystemId: () => number | null;
+  /** 高亮星域（会自动移动摄像机） */
+  highlightRegion: (regionId: number | null) => void;
+  /** 获取当前高亮的星域ID */
+  getHighlightedRegionId: () => number | null;
+  /** 高亮星系（不会自动移动摄像机） */
+  highlightSystems: (systemIds: number[]) => void;
+  /** 获取当前高亮的星系ID列表 */
+  getHighlightedSystemIds: () => number[];
+  
   /** @internal 内部方法，供组件使用 */
   __internal?: {
     setControlsRef: (ref: unknown) => void;
     setSystems: (systems: SolarSystem[]) => void;
     setInitialCameraPosition: (position: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }) => void;
+    subscribe: (callback: () => void) => () => void;
+    getVersion: () => number;
   };
 }
 
@@ -184,31 +234,7 @@ export interface EveMap3DProps {
   jumpgates?: Jumpgate[];
   /** 星域数据（可选，用于显示星域标签） */
   regions?: Region[];
-  /** 语言设置 (默认 'zh') */
-  language?: Language;
-  /** 星系渲染配置数组（可选，不传入则按安全等级渲染） */
-  systemRenderConfigs?: SystemRenderConfig[];
-  /** 安全等级颜色配置（可选，用于覆盖默认颜色） */
-  securityColors?: SecurityColorConfig;
-  /** 聚焦配置（可选） */
-  focus?: FocusConfig;
-  /** 事件回调 */
-  events?: EveMap3DEvents;
-  /** 自定义样式 */
-  style?: CustomStyleConfig;
-  /** 是否只显示New Eden星系（默认 true） */
-  filterNewEdenOnly?: boolean;
-  /** 高亮的星域ID（外部控制） */
-  highlightedRegionId?: number | null;
-  /** 自定义过滤函数 */
-  systemFilter?: (system: SolarSystem) => boolean;
-  /** 容器样式 */
-  containerStyle?: React.CSSProperties;
-  /** 容器类名 */
-  containerClassName?: string;
-  /** 地图控制对象（通过 useMapControl 生成） */
-  mapControl?: MapControl;
-  /** 跳跃引擎配置 */
-  jumpDriveConfig?: JumpDriveConfig;
+  /** 地图控制对象（通过 useMapControl 生成，包含配置和控制方法） */
+  mapControl: MapControl;
 }
 

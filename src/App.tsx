@@ -4,13 +4,9 @@ import { loadSolarSystems, loadStargates, loadRegions } from './utils/loadEveDat
 import './App.css'
 
 function App() {
-  const mapControl = useMapControl()
   const [systems, setSystems] = useState<SolarSystem[]>([])
   const [stargates, setStargates] = useState<Stargate[]>([])
   const [regions, setRegions] = useState<Region[]>([])
-  const [selectedSystem, setSelectedSystem] = useState<SolarSystem | null>(null)
-  const [highlightedRegionId, setHighlightedRegionId] = useState<number | null>(null)
-  const [hasUserSelectedRegion, setHasUserSelectedRegion] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [jumpDriveEnabled, setJumpDriveEnabled] = useState(true)
@@ -21,7 +17,68 @@ function App() {
   const [isPanelExpanded, setIsPanelExpanded] = useState(true)
   const language: 'zh' | 'en' = 'zh'
 
-  // 加载数据
+  // Demo 跳桥连接
+  const jumpgates = useMemo<Jumpgate[]>(() => {
+    if (systems.length === 0) {
+      return []
+    }
+
+    const resolveSystemId = (searchName: string): number | undefined => {
+      const normalized = searchName.trim().toLowerCase()
+      const match = systems.find(system => {
+        const enName = system.name.en?.toLowerCase()
+        const zhName = system.name.zh?.toLowerCase()
+        return enName === normalized || zhName === normalized
+      })
+      return match?._key
+    }
+
+    const pairs: Array<[string, string]> = [
+      ['TCAG-3', 'L5D-ZL'],
+      ['F-M1FU', 'L-YMYU']
+    ]
+
+    const resolved: Jumpgate[] = []
+    pairs.forEach(([fromName, toName]) => {
+      const fromId = resolveSystemId(fromName)
+      const toId = resolveSystemId(toName)
+      if (fromId !== undefined && toId !== undefined) {
+        resolved.push({ fromSystemId: fromId, toSystemId: toId })
+      }
+    })
+
+    return resolved
+  }, [systems])
+
+  const jumpDriveConfig = useMemo<JumpDriveConfig | undefined>(() => {
+    if (!jumpDriveEnabled) {
+      return undefined
+    }
+    return {
+      originSystemId: jumpDriveOriginId,
+      rangeLightYears: Math.max(jumpDriveRange, 0),
+      showBubble: true,
+      bubbleColor: '#00ffff',
+      bubbleOpacity: 0.06,
+    }
+  }, [jumpDriveEnabled, jumpDriveOriginId, jumpDriveRange])
+
+  // 创建 mapControl（不包含静态数据）
+  const mapControl = useMapControl({
+    language: language,
+    filterNewEdenOnly: true,
+    jumpDriveConfig: jumpDriveConfig,
+    events: {
+      onSystemClick: (system) => {
+        console.log('点击了星系:', system);
+      },
+      onRegionClick: (region) => {
+        console.log('点击了星域:', region);
+      },
+    },
+  })
+
+  // 加载数据（只执行一次）
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -40,7 +97,15 @@ function App() {
       }
     }
     loadData()
-  }, [])
+  }, []) // 只在组件挂载时执行一次
+
+  // 更新跳跃引擎配置
+  useEffect(() => {
+    mapControl.setConfig({
+      jumpDriveConfig: jumpDriveConfig,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpDriveConfig]) // mapControl 是稳定的引用，不需要作为依赖
 
   // 过滤New Eden系统
   const filteredSystems = useMemo(() => {
@@ -78,39 +143,6 @@ function App() {
     return connectionSet.size
   }, [stargates, filteredSystems, systemMap])
 
-  // Demo 跳桥连接
-  const jumpgates = useMemo<Jumpgate[]>(() => {
-    if (systems.length === 0) {
-      return []
-    }
-
-    const resolveSystemId = (searchName: string): number | undefined => {
-      const normalized = searchName.trim().toLowerCase()
-      const match = systems.find(system => {
-        const enName = system.name.en?.toLowerCase()
-        const zhName = system.name.zh?.toLowerCase()
-        return enName === normalized || zhName === normalized
-      })
-      return match?._key
-    }
-
-    const pairs: Array<[string, string]> = [
-      ['TCAG-3', 'L5D-ZL'],
-      ['F-M1FU', 'L-YMYU']
-    ]
-
-    const resolved: Jumpgate[] = []
-    pairs.forEach(([fromName, toName]) => {
-      const fromId = resolveSystemId(fromName)
-      const toId = resolveSystemId(toName)
-      if (fromId !== undefined && toId !== undefined) {
-        resolved.push({ fromSystemId: fromId, toSystemId: toId })
-      }
-    })
-
-    return resolved
-  }, [systems])
-
   const resolveSystemIdentifier = useCallback((value: string) => {
     const trimmed = value.trim()
     if (trimmed.length === 0) {
@@ -135,19 +167,6 @@ function App() {
 
     return undefined
   }, [systemMap, systems])
-
-  const jumpDriveConfig = useMemo<JumpDriveConfig | undefined>(() => {
-    if (!jumpDriveEnabled) {
-      return undefined
-    }
-    return {
-      originSystemId: jumpDriveOriginId,
-      rangeLightYears: Math.max(jumpDriveRange, 0),
-      showBubble: true,
-      bubbleColor: '#00ffff',
-      bubbleOpacity: 0.06,
-    }
-  }, [jumpDriveEnabled, jumpDriveOriginId, jumpDriveRange])
 
   const jumpDriveOriginName = useMemo(() => {
     const system = systemMap.get(jumpDriveOriginId)
@@ -185,7 +204,8 @@ function App() {
           : system?.name.en || system?.name.zh || `${resolved}`
       setJumpDriveOriginInput(displayName ?? `${resolved}`)
       setJumpDriveError(null)
-      mapControl.focusSystem?.(resolved)
+      // 通过 mapControl 聚焦到星系
+      mapControl.focusSystem(resolved)
       return
     }
 
@@ -251,6 +271,11 @@ function App() {
       })
   }, [regions, filteredSystems, language])
 
+  // 从 mapControl 获取当前选中的星系和高亮的星域
+  const selectedSystemId = mapControl.getSelectedSystemId()
+  const selectedSystem = selectedSystemId ? systemMap.get(selectedSystemId) : null
+  const highlightedRegionId = mapControl.getHighlightedRegionId()
+
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-black text-white">
@@ -271,34 +296,13 @@ function App() {
 
   return (
     <div className="w-full h-full relative">
-      <EveMap3D
+      {/* 静态数据直接传入 EveMap3D 组件 */}
+      <EveMap3D 
         systems={systems}
         stargates={stargates}
         jumpgates={jumpgates}
         regions={regions}
-        language={language}
-        filterNewEdenOnly={true}
-        highlightedRegionId={hasUserSelectedRegion ? highlightedRegionId : undefined}
-        mapControl={mapControl}
-        jumpDriveConfig={jumpDriveConfig}
-        events={{
-          onSystemClick: (system) => {
-            setSelectedSystem(system)
-            // 点击新星系时，如果用户之前选择了星域，清除星域选择
-            if (hasUserSelectedRegion) {
-              setHighlightedRegionId(null)
-              setHasUserSelectedRegion(false)
-            }
-          },
-          onRegionClick: (region) => {
-            setHighlightedRegionId(region._key)
-            setHasUserSelectedRegion(true)
-            // 点击星域时，清除选中的星系
-            setSelectedSystem(null)
-            // 聚焦到该星域
-            mapControl.focusRegion?.(region._key)
-          },
-        }}
+        mapControl={mapControl} 
       />
 
       {/* 控制面板 */}
@@ -443,10 +447,8 @@ function App() {
             value={highlightedRegionId || ''}
             onChange={e => {
               const value = e.target.value ? Number(e.target.value) : null
-              setHighlightedRegionId(value)
-              setHasUserSelectedRegion(true)
-              // 选择新星域时，清除选中的星系
-              setSelectedSystem(null)
+              // 通过 mapControl 高亮星域（会自动移动摄像机）
+              mapControl.highlightRegion(value)
             }}
             style={{
               width: '100%',

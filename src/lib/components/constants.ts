@@ -1,4 +1,4 @@
-import type { SecurityColorConfig } from '../../types';
+import type { SecurityColorConfig } from '../types';
 
 export const DEFAULT_SECURITY_COLORS: Required<SecurityColorConfig> = {
 	highsec: '#4CAF50',

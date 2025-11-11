@@ -10,5 +10,3 @@ export function clampSystemPointBaseScale(size?: number) {
 	}
 	return size;
 }
-
-
