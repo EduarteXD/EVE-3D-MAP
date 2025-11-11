@@ -2,7 +2,6 @@ import { useRef, useCallback } from 'react';
 import type { MapControl } from './types';
 import type { SolarSystem } from './types';
 
-// OrbitControls 类型（简化版，用于类型安全）
 interface OrbitControlsRef {
   target: { x: number; y: number; z: number; set: (x: number, y: number, z: number) => void };
   object: {
@@ -164,7 +163,7 @@ export function useMapControl(): MapControl {
       }
     });
 
-    const cameraDistance = maxDistance * 1.5;
+    const cameraDistance = Math.max(maxDistance * 1.5, 7e16);
 
     // 目标位置：聚焦到星系本身的位置
     const targetCenter = { x: -system.position.x, y: -system.position.y, z: system.position.z };
@@ -260,7 +259,7 @@ export function useMapControl(): MapControl {
       }
     });
 
-    const cameraDistance = maxDistance * 1.5;
+    const cameraDistance = Math.max(maxDistance * 1.5, 7e16);
 
     // 目标位置
     const targetCenter = { x: centerX, y: centerY, z: centerZ };

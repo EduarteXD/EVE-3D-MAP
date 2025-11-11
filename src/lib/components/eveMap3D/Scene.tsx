@@ -466,7 +466,7 @@ export function Scene({
 							onClick={onRegionClick}
 						/>
 					))}
-			<OrbitControls ref={controlsRef} enablePan={true} enableZoom={true} enableRotate={true} minDistance={1e15} maxDistance={1e18} autoRotate={false} zoomSpeed={-1} />
+			<OrbitControls ref={controlsRef} enablePan={true} enableZoom={true} enableRotate={true} minDistance={7e16} maxDistance={1e18} autoRotate={false} zoomSpeed={-1} />
 			{onCompassRotationChange && <Compass2DInternal onRotationChange={onCompassRotationChange} />}
 		</>
 	);
