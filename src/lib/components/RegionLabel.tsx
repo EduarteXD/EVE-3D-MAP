@@ -27,7 +27,7 @@ export function RegionLabel({
 	const opacitySetRef = useRef(false);
 	const { camera } = useThree();
 	const baseFontSize = (style?.labelFontSize || 2e15) * 1.5;
-	const labelOffset = isHighlighted ? 4e15 : 5e15;
+	const labelOffset = 4e15;
 
 	const regionCenter = useMemo(() => {
 		const regionSystems = systems.filter((s) => s.regionID === region._key);
